@@ -18,6 +18,7 @@ export const meals = pgTable("meals", {
   isPreset: boolean("is_preset").default(false).notNull(),
   userId: text("user_id"), // null if preset
   category: text("category").$type<MealCategory>().default("other").notNull(),
+  instructions: text("instructions"), // AI-generated cooking steps, cached after first generation
 });
 
 export const mealIngredients = pgTable("meal_ingredients", {

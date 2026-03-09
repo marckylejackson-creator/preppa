@@ -40,6 +40,54 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/meals/:id/instructions — returns cached or AI-generated cooking steps
+  app.get("/api/meals/:id/instructions", async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid meal id" });
+
+      const meal = await storage.getMealById(id);
+      if (!meal) return res.status(404).json({ message: "Meal not found" });
+
+      // Return cached instructions if available
+      if (meal.instructions) {
+        return res.json({ instructions: meal.instructions });
+      }
+
+      // Generate with AI
+      const ingredientList = meal.ingredients
+        .map((i: any) => `${i.amount ? i.amount + " " : ""}${i.name}`)
+        .join(", ");
+
+      const prompt = `You are a helpful home-cooking assistant. Write clear, friendly weeknight cooking instructions for "${meal.name}".
+
+Meal details:
+- Description: ${meal.description ?? "N/A"}
+- Prep time: ${meal.prepTimeMins} minutes
+- Ingredients: ${ingredientList}
+
+Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, and easy for a busy parent to follow. No extra commentary, no intro, no outro — just the numbered steps.`;
+
+      const aiRes = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 400,
+      });
+
+      const instructions = aiRes.choices[0]?.message?.content?.trim() ?? "";
+
+      // Cache in DB for future requests
+      if (instructions) {
+        await storage.saveMealInstructions(id, instructions);
+      }
+
+      res.json({ instructions });
+    } catch (err) {
+      console.error("Instructions generation error:", err);
+      res.status(500).json({ message: "Failed to generate instructions" });
+    }
+  });
+
   app.get(api.pantry.list.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const items = await storage.getPantryItems(userId);

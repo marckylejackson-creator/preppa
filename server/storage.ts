@@ -8,7 +8,9 @@ import { eq, and, desc, gte } from "drizzle-orm";
 export interface IStorage {
   // Meals
   getMeals(userId?: string): Promise<any[]>;
+  getMealById(id: number): Promise<any | null>;
   createMeal(meal: InsertMeal, ingredients?: InsertMealIngredient[]): Promise<any>;
+  saveMealInstructions(id: number, instructions: string): Promise<void>;
   
   // Pantry
   getPantryItems(userId: string): Promise<any[]>;
@@ -46,6 +48,17 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
   
+  async getMealById(id: number) {
+    const [m] = await db.select().from(meals).where(eq(meals.id, id));
+    if (!m) return null;
+    const ingredients = await db.select().from(mealIngredients).where(eq(mealIngredients.mealId, m.id));
+    return { ...m, ingredients };
+  }
+
+  async saveMealInstructions(id: number, instructions: string) {
+    await db.update(meals).set({ instructions }).where(eq(meals.id, id));
+  }
+
   async createMeal(meal: InsertMeal, ingredients: InsertMealIngredient[] = []) {
     const [newMeal] = await db.insert(meals).values(meal).returning();
     const insertedIngredients = [];

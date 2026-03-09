@@ -1,6 +1,7 @@
-import { X, Clock, Copy, Share2, Check, Tag } from "lucide-react";
+import { X, Clock, Copy, Share2, Check, Tag, ChefHat, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
 type Ingredient = {
@@ -23,34 +24,54 @@ type Props = {
   onClose: () => void;
 };
 
-function buildRecipeText(meal: Meal): string {
+const CATEGORY_LABELS: Record<string, string> = {
+  pasta: "Pasta", chicken: "Chicken", beef: "Beef", pork: "Pork",
+  seafood: "Seafood", vegetarian: "Vegetarian", soup: "Soup",
+  quick: "Quick & Easy", other: "Other",
+};
+
+function buildRecipeText(meal: Meal, instructions: string): string {
   const lines: string[] = [
     `🍽 ${meal.name}`,
     meal.description ? `\n${meal.description}` : "",
     `\n⏱ Prep time: ${meal.prepTimeMins} mins`,
     "\n📋 Ingredients:",
     ...meal.ingredients.map(i => `  • ${i.amount ? `${i.amount} ` : ""}${i.name}`),
-    "\n— Shared from Preppa",
   ];
-  return lines.filter(Boolean).join("\n");
+  if (instructions) {
+    lines.push("\n👨‍🍳 How to cook:");
+    lines.push(instructions);
+  }
+  lines.push("\n— Shared from Preppa");
+  return lines.filter(l => l !== "").join("\n");
 }
-
-const CATEGORY_LABELS: Record<string, string> = {
-  pasta: "Pasta", chicken: "Chicken", beef: "Beef", pork: "Pork",
-  seafood: "Seafood", vegetarian: "Vegetarian", soup: "Soup", quick: "Quick & Easy", other: "Other",
-};
 
 export function RecipeModal({ meal, onClose }: Props) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
 
+  const { data: instructionsData, isLoading: loadingInstructions } = useQuery<{ instructions: string }>({
+    queryKey: ["/api/meals", meal?.id, "instructions"],
+    queryFn: async () => {
+      const res = await fetch(`/api/meals/${meal!.id}/instructions`);
+      if (!res.ok) throw new Error("Failed to fetch instructions");
+      return res.json();
+    },
+    enabled: !!meal,
+    staleTime: Infinity,
+  });
+
   if (!meal) return null;
 
-  const recipeText = buildRecipeText(meal);
+  const instructions = instructionsData?.instructions ?? "";
+  const steps = instructions
+    .split("\n")
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(recipeText);
+      await navigator.clipboard.writeText(buildRecipeText(meal, instructions));
       setCopied(true);
       toast({ title: "Recipe copied!", description: "Paste it anywhere to share." });
       setTimeout(() => setCopied(false), 2000);
@@ -62,9 +83,9 @@ export function RecipeModal({ meal, onClose }: Props) {
   const handleShare = async () => {
     if (navigator.share) {
       try {
-        await navigator.share({ title: meal.name, text: recipeText });
+        await navigator.share({ title: meal.name, text: buildRecipeText(meal, instructions) });
       } catch {
-        // user cancelled or browser blocked — silently ignore
+        // user cancelled — silently ignore
       }
     } else {
       handleCopy();
@@ -91,6 +112,7 @@ export function RecipeModal({ meal, onClose }: Props) {
           transition={{ type: "spring", stiffness: 300, damping: 28 }}
           className="relative w-full max-w-md bg-card rounded-[2rem] premium-shadow overflow-hidden max-h-[90vh] flex flex-col"
         >
+          {/* Header */}
           <div className="p-6 sm:p-8 pb-0">
             <button
               onClick={onClose}
@@ -118,7 +140,10 @@ export function RecipeModal({ meal, onClose }: Props) {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 sm:px-8 py-6 space-y-5">
+          {/* Scrollable body */}
+          <div className="flex-1 overflow-y-auto px-6 sm:px-8 py-6 space-y-6">
+
+            {/* Ingredients */}
             {main.length > 0 && (
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Ingredients</h3>
@@ -152,8 +177,51 @@ export function RecipeModal({ meal, onClose }: Props) {
                 </ul>
               </div>
             )}
+
+            {/* Instructions */}
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
+                <ChefHat size={13} />
+                How to Cook
+              </h3>
+
+              {loadingInstructions ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 size={14} className="animate-spin text-primary" />
+                    <span>Generating cooking steps...</span>
+                  </div>
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="animate-pulse flex gap-3">
+                      <div className="w-5 h-5 rounded-full bg-secondary shrink-0 mt-0.5" />
+                      <div className="flex-1 space-y-1.5">
+                        <div className={`h-3 bg-secondary rounded-full ${i % 2 === 0 ? "w-full" : "w-4/5"}`} />
+                        {i < 3 && <div className="h-3 bg-secondary rounded-full w-3/5" />}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : steps.length > 0 ? (
+                <ol className="space-y-4">
+                  {steps.map((step, i) => {
+                    const cleaned = step.replace(/^\d+[\.\)]\s*/, "");
+                    return (
+                      <li key={i} className="flex gap-3 text-sm" data-testid={`step-${i}`}>
+                        <span className="w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                          {i + 1}
+                        </span>
+                        <span className="text-foreground leading-relaxed">{cleaned}</span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : (
+                <p className="text-sm text-muted-foreground">Could not generate instructions. Try again later.</p>
+              )}
+            </div>
           </div>
 
+          {/* Footer actions */}
           <div className="px-6 sm:px-8 pb-6 sm:pb-8 pt-2 flex gap-3 border-t border-border/50">
             <button
               onClick={handleCopy}
