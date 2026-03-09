@@ -1,6 +1,7 @@
 import { LogIn, ArrowRight, Wand2, ShoppingCart, History } from "lucide-react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
+import logoSrc from "@assets/preppa_logo_orange_1_1773037358063.png";
 
 export default function Landing() {
   return (
@@ -10,9 +11,7 @@ export default function Landing() {
       <div className="absolute bottom-[-10%] right-[-5%] w-[50%] h-[50%] bg-accent/40 rounded-full blur-3xl" />
 
       <nav className="w-full px-6 py-6 flex justify-between items-center relative z-10">
-        <div className="font-display font-bold text-2xl tracking-tight text-foreground">
-          Preppa
-        </div>
+        <img src={logoSrc} alt="Preppa" className="h-9 w-auto" />
         <button
           onClick={() => window.location.href = "/api/login"}
           data-testid="button-landing-signin"

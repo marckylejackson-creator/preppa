@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import logoSrc from "@assets/preppa_logo_orange_1_1773037358063.png";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Calendar, ShoppingCart, Wand2, ArrowRightLeft, LogIn, X, ArrowRight, CheckCircle2, Circle, Package, ChevronRight, ChevronDown, Clock } from "lucide-react";
@@ -110,7 +111,7 @@ export default function GuestDashboard() {
       {/* Minimal guest nav */}
       <nav className="sticky top-0 z-40 w-full bg-white/80 backdrop-blur border-b border-border/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex justify-between items-center h-16">
-          <Link href="/" className="font-display font-bold text-xl tracking-tight text-foreground">Preppa</Link>
+          <Link href="/"><img src={logoSrc} alt="Preppa" className="h-8 w-auto" /></Link>
           <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground hidden sm:block">This is a preview</span>
             <a

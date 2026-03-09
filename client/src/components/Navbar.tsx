@@ -1,6 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, UtensilsCrossed, LayoutDashboard, History, BookOpen } from "lucide-react";
+import { LogOut, LayoutDashboard, History, BookOpen } from "lucide-react";
 import { Link, useLocation } from "wouter";
+import logoSrc from "@assets/preppa_logo_orange_1_1773037358063.png";
 
 export function Navbar() {
   const { user, logout } = useAuth();
@@ -17,13 +18,8 @@ export function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
           <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary/10 rounded-2xl flex items-center justify-center text-primary">
-                <UtensilsCrossed size={22} strokeWidth={2.5} />
-              </div>
-              <span className="font-display font-bold text-2xl tracking-tight text-foreground">
-                Preppa
-              </span>
+            <Link href="/" className="flex items-center">
+              <img src={logoSrc} alt="Preppa" className="h-9 w-auto" />
             </Link>
 
             {user && (
