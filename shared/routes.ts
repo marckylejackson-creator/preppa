@@ -103,7 +103,23 @@ export const api = {
         200: mealPlanWithDetailsSchema,
         500: errorSchemas.internal,
       },
-    }
+    },
+    swap: {
+      method: "PATCH" as const,
+      path: "/api/meal-plans/current/swap" as const,
+      input: z.object({ day: z.string(), newMealId: z.number() }),
+      responses: {
+        200: mealPlanWithDetailsSchema,
+        500: errorSchemas.internal,
+      },
+    },
+    swapOptions: {
+      method: "GET" as const,
+      path: "/api/meal-plans/swap-options" as const,
+      responses: {
+        200: z.array(mealWithIngredientsSchema),
+      },
+    },
   },
   groceryLists: {
     current: {

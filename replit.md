@@ -13,6 +13,10 @@ Working parents (primarily moms) with multiple kids who already cook most weekni
 - **Auth:** Replit Auth (OpenID Connect via `openid-client` + passport)
 - **AI:** OpenAI via Replit AI Integrations (`gpt-4o` for meal plan + grocery list generation)
 
+## User Paths
+- **Authenticated** — Full access: AI plan generation, swap meals, view history, save grocery lists
+- **Guest (`/try`)** — Preview a random plan client-side (no auth), prompted to sign up on any action (swap, regenerate, save list)
+
 ## Core Features (MVP)
 1. **Meals** — Browse preset meals or add custom family meals with ingredients
 2. **Meal Plan** — AI-generated 5-day weeknight plan (Mon–Fri) using meals the family already knows

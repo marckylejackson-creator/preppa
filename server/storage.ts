@@ -19,6 +19,8 @@ export interface IStorage {
   getCurrentMealPlan(userId: string): Promise<any | null>;
   createMealPlan(userId: string, planMeals: { mealId: number, dayOfWeek: string }[], weekOf?: string): Promise<any>;
   getMealPlanHistory(userId: string, limit?: number): Promise<any[]>;
+  swapMealInPlan(planId: number, day: string, newMealId: number): Promise<void>;
+  getSwapOptions(userId: string, excludeMealIds: number[]): Promise<any[]>;
   
   // Grocery Lists
   getCurrentGroceryList(userId: string): Promise<any | null>;
@@ -122,6 +124,20 @@ export class DatabaseStorage implements IStorage {
   async toggleGroceryItem(id: number, isChecked: boolean) {
     const [item] = await db.update(groceryListItems).set({ isChecked }).where(eq(groceryListItems.id, id)).returning();
     return item;
+  }
+
+  async swapMealInPlan(planId: number, day: string, newMealId: number) {
+    const [existing] = await db.select().from(mealPlanMeals)
+      .where(and(eq(mealPlanMeals.planId, planId), eq(mealPlanMeals.dayOfWeek, day)));
+    if (existing) {
+      await db.update(mealPlanMeals).set({ mealId: newMealId })
+        .where(and(eq(mealPlanMeals.planId, planId), eq(mealPlanMeals.dayOfWeek, day)));
+    }
+  }
+
+  async getSwapOptions(userId: string, excludeMealIds: number[]) {
+    const allMeals = await this.getMeals(userId);
+    return allMeals.filter(m => !excludeMealIds.includes(m.id));
   }
 
   async getGroceryListByPlanId(planId: number) {
