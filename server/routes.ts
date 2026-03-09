@@ -81,13 +81,19 @@ export async function registerRoutes(
     res.json(options);
   });
 
-  // Instant swap — just update the day's meal, no AI, no grocery list regeneration
+  // Instant swap — records swap event for preference learning, updates the day's meal
   app.patch(api.mealPlans.swap.path, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const input = api.mealPlans.swap.input.parse(req.body);
       const plan = await storage.getCurrentMealPlan(userId);
       if (!plan) return res.status(404).json({ message: "No active plan" });
+
+      // Find the meal being replaced so we can record it as rejected
+      const dayMeal = plan.meals.find((m: any) => m.dayOfWeek === input.day);
+      if (dayMeal) {
+        await storage.recordSwapEvent(userId, dayMeal.mealId, input.newMealId);
+      }
 
       await storage.swapMealInPlan(plan.id, input.day, input.newMealId);
       const updatedPlan = await storage.getCurrentMealPlan(userId);
@@ -105,6 +111,7 @@ export async function registerRoutes(
       const userId = req.user.claims.sub;
       const availableMeals = await storage.getMeals(userId);
       const recentHistory = await storage.getMealPlanHistory(userId, 4);
+      const rejectedCategories = await storage.getWeeklyRejectedCategories(userId);
 
       const now = new Date();
       const dayOfWeek = now.getDay();
@@ -129,20 +136,30 @@ export async function registerRoutes(
         ? recentGroceries.items.filter((i: any) => !i.isPantryStaple).map((i: any) => i.name).join(", ")
         : "None";
 
+      // Build preference signal from this week's swap data
+      const preferenceNote = rejectedCategories.length === 0
+        ? "No swap preferences recorded this week."
+        : `This week the user has swapped away from these meal categories (most rejected first): ${
+            rejectedCategories.map(r => `${r.category} (rejected ${r.count}x)`).join(", ")
+          }. Avoid over-indexing on these categories — use them sparingly or not at all if the count is high (2+).`;
+
       const prompt = `
 You are an AI meal planner for busy working families. Create a 5-day weeknight meal plan (Monday to Friday) for the week of ${weekOf}.
 
-Available Meals (with their ingredients):
-${JSON.stringify(availableMeals.map(m => ({ id: m.id, name: m.name, prepTime: m.prepTimeMins, ingredients: m.ingredients.map((i: any) => ({ name: i.name, amount: i.amount, isPantryStaple: i.isPantryStaple })) })))}
+Available Meals (id, name, category, prepTime):
+${JSON.stringify(availableMeals.map(m => ({ id: m.id, name: m.name, category: m.category, prepTime: m.prepTimeMins, ingredients: m.ingredients.map((i: any) => ({ name: i.name, amount: i.amount, isPantryStaple: i.isPantryStaple })) })))}
 
 Recent meal history (avoid repeating meals from the past 2 weeks):
 ${historyContext}
+
+User preference signal (from swap behavior this week):
+${preferenceNote}
 
 Non-staple groceries recently purchased (may still be partly available — try to use them up):
 ${recentlyBought}
 
 Instructions:
-1. Pick exactly 5 meals from the available meals list. Avoid repeating any meal from last week. Vary proteins and cooking styles. Try to use up recently-bought ingredients where logical.
+1. Pick exactly 5 meals from the available meals list. Avoid repeating any meal from last week. Vary proteins and cooking styles. Respect the user's preference signal — avoid categories they keep rejecting. Try to use up recently-bought ingredients where logical.
 2. Consolidate ALL ingredients across all 5 meals. Combine duplicates and sum quantities. For ingredients likely still available from last week, reduce quantity or omit if a full pack was recently purchased.
 3. For each grocery item, produce a "storeUnit" describing exactly what to buy at the store (e.g. "1 lb pack", "2 cans (14.5 oz each)", "1 bunch", "1 head", "1 bag (8 oz)").
 4. Classify each item as "isPantryStaple": true if it's a common household pantry item families typically already own.
@@ -218,14 +235,14 @@ Instructions:
 // ─── Seed Data ────────────────────────────────────────────────────────────────
 
 type SeedMeal = {
-  name: string; description: string; prepTimeMins: number;
+  name: string; description: string; prepTimeMins: number; category: string;
   ingredients: { name: string; amount: string; isPantryStaple: boolean }[];
 };
 
 const ALL_SEED_MEALS: SeedMeal[] = [
   // ── Pasta & Italian ──────────────────────────────────────────────
   {
-    name: "Spaghetti Bolognese", description: "Classic Italian pasta dish", prepTimeMins: 30,
+    name: "Spaghetti Bolognese", description: "Classic Italian pasta dish", prepTimeMins: 30, category: "pasta",
     ingredients: [
       { name: "Spaghetti", amount: "1 lb", isPantryStaple: true },
       { name: "Ground Beef", amount: "1 lb", isPantryStaple: false },
@@ -233,7 +250,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Baked Ziti", description: "Cheesy pasta bake the whole family loves", prepTimeMins: 40,
+    name: "Baked Ziti", description: "Cheesy pasta bake the whole family loves", prepTimeMins: 40, category: "pasta",
     ingredients: [
       { name: "Ziti Pasta", amount: "1 lb", isPantryStaple: true },
       { name: "Ricotta Cheese", amount: "15 oz", isPantryStaple: false },
@@ -242,7 +259,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Chicken Alfredo", description: "Creamy pasta with tender chicken", prepTimeMins: 30,
+    name: "Chicken Alfredo", description: "Creamy pasta with tender chicken", prepTimeMins: 30, category: "pasta",
     ingredients: [
       { name: "Fettuccine Pasta", amount: "1 lb", isPantryStaple: true },
       { name: "Chicken Breast", amount: "1 lb", isPantryStaple: false },
@@ -251,7 +268,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Mac and Cheese", description: "Homemade creamy mac, always a hit", prepTimeMins: 25,
+    name: "Mac and Cheese", description: "Homemade creamy mac, always a hit", prepTimeMins: 25, category: "pasta",
     ingredients: [
       { name: "Elbow Macaroni", amount: "1 lb", isPantryStaple: true },
       { name: "Shredded Cheddar", amount: "2 cups", isPantryStaple: false },
@@ -260,7 +277,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Pasta Primavera", description: "Light pasta loaded with fresh veggies", prepTimeMins: 25,
+    name: "Pasta Primavera", description: "Light pasta loaded with fresh veggies", prepTimeMins: 25, category: "pasta",
     ingredients: [
       { name: "Penne Pasta", amount: "1 lb", isPantryStaple: true },
       { name: "Zucchini", amount: "1", isPantryStaple: false },
@@ -270,7 +287,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Penne Arrabbiata", description: "Spicy tomato pasta, ready in 20 min", prepTimeMins: 20,
+    name: "Penne Arrabbiata", description: "Spicy tomato pasta, ready in 20 min", prepTimeMins: 20, category: "pasta",
     ingredients: [
       { name: "Penne Pasta", amount: "1 lb", isPantryStaple: true },
       { name: "Crushed Tomatoes", amount: "28 oz can", isPantryStaple: true },
@@ -279,7 +296,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Lasagna", description: "Classic layered pasta, great for meal prep", prepTimeMins: 60,
+    name: "Lasagna", description: "Classic layered pasta, great for meal prep", prepTimeMins: 60, category: "pasta",
     ingredients: [
       { name: "Lasagna Noodles", amount: "1 box", isPantryStaple: true },
       { name: "Ground Beef", amount: "1 lb", isPantryStaple: false },
@@ -291,7 +308,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
 
   // ── Chicken ──────────────────────────────────────────────────────
   {
-    name: "Chicken Stir Fry", description: "Quick and easy veggie stir fry", prepTimeMins: 20,
+    name: "Chicken Stir Fry", description: "Quick and easy veggie stir fry", prepTimeMins: 20, category: "chicken",
     ingredients: [
       { name: "Chicken Breast", amount: "1 lb", isPantryStaple: false },
       { name: "Broccoli", amount: "1 head", isPantryStaple: false },
@@ -300,7 +317,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Baked Chicken Thighs", description: "Juicy oven-baked chicken with crispy skin", prepTimeMins: 40,
+    name: "Baked Chicken Thighs", description: "Juicy oven-baked chicken with crispy skin", prepTimeMins: 40, category: "chicken",
     ingredients: [
       { name: "Chicken Thighs", amount: "2 lbs", isPantryStaple: false },
       { name: "Garlic Powder", amount: "1 tsp", isPantryStaple: true },
@@ -309,7 +326,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Chicken Fajitas", description: "Sizzling skillet fajitas with peppers and onions", prepTimeMins: 25,
+    name: "Chicken Fajitas", description: "Sizzling skillet fajitas with peppers and onions", prepTimeMins: 25, category: "chicken",
     ingredients: [
       { name: "Chicken Breast", amount: "1.5 lbs", isPantryStaple: false },
       { name: "Bell Peppers", amount: "3", isPantryStaple: false },
@@ -319,7 +336,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Honey Garlic Chicken", description: "Sweet and savory glazed chicken over rice", prepTimeMins: 25,
+    name: "Honey Garlic Chicken", description: "Sweet and savory glazed chicken over rice", prepTimeMins: 25, category: "chicken",
     ingredients: [
       { name: "Chicken Breast", amount: "1.5 lbs", isPantryStaple: false },
       { name: "Honey", amount: "3 tbsp", isPantryStaple: true },
@@ -329,7 +346,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Chicken Tikka Masala", description: "Creamy tomato curry everyone loves", prepTimeMins: 35,
+    name: "Chicken Tikka Masala", description: "Creamy tomato curry everyone loves", prepTimeMins: 35, category: "chicken",
     ingredients: [
       { name: "Chicken Breast", amount: "1.5 lbs", isPantryStaple: false },
       { name: "Tikka Masala Sauce", amount: "15 oz jar", isPantryStaple: false },
@@ -338,7 +355,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Sheet Pan Lemon Chicken", description: "Bright lemony chicken and veggies, zero cleanup", prepTimeMins: 35,
+    name: "Sheet Pan Lemon Chicken", description: "Bright lemony chicken and veggies, zero cleanup", prepTimeMins: 35, category: "chicken",
     ingredients: [
       { name: "Chicken Thighs", amount: "2 lbs", isPantryStaple: false },
       { name: "Lemon", amount: "2", isPantryStaple: false },
@@ -348,7 +365,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Chicken Fried Rice", description: "Better-than-takeout fried rice in 20 minutes", prepTimeMins: 20,
+    name: "Chicken Fried Rice", description: "Better-than-takeout fried rice in 20 minutes", prepTimeMins: 20, category: "chicken",
     ingredients: [
       { name: "Cooked Rice", amount: "3 cups", isPantryStaple: true },
       { name: "Chicken Breast", amount: "1 lb", isPantryStaple: false },
@@ -358,14 +375,14 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "BBQ Chicken Drumsticks", description: "Sticky oven-baked BBQ drumsticks", prepTimeMins: 45,
+    name: "BBQ Chicken Drumsticks", description: "Sticky oven-baked BBQ drumsticks", prepTimeMins: 45, category: "chicken",
     ingredients: [
       { name: "Chicken Drumsticks", amount: "3 lbs", isPantryStaple: false },
       { name: "BBQ Sauce", amount: "1 cup", isPantryStaple: true },
     ]
   },
   {
-    name: "Buffalo Chicken Wraps", description: "Spicy buffalo chicken wrapped up for dinner", prepTimeMins: 20,
+    name: "Buffalo Chicken Wraps", description: "Spicy buffalo chicken wrapped up for dinner", prepTimeMins: 20, category: "chicken",
     ingredients: [
       { name: "Chicken Breast", amount: "1 lb", isPantryStaple: false },
       { name: "Buffalo Sauce", amount: "½ cup", isPantryStaple: true },
@@ -375,7 +392,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Chicken Noodle Soup", description: "Classic comforting homemade chicken soup", prepTimeMins: 35,
+    name: "Chicken Noodle Soup", description: "Classic comforting homemade chicken soup", prepTimeMins: 35, category: "chicken",
     ingredients: [
       { name: "Chicken Breast", amount: "1 lb", isPantryStaple: false },
       { name: "Egg Noodles", amount: "2 cups", isPantryStaple: true },
@@ -385,7 +402,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Chicken Casserole", description: "Easy creamy chicken and veggie casserole", prepTimeMins: 45,
+    name: "Chicken Casserole", description: "Easy creamy chicken and veggie casserole", prepTimeMins: 45, category: "chicken",
     ingredients: [
       { name: "Chicken Breast", amount: "1.5 lbs", isPantryStaple: false },
       { name: "Cream of Mushroom Soup", amount: "2 cans", isPantryStaple: true },
@@ -396,7 +413,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
 
   // ── Beef & Ground Beef ───────────────────────────────────────────
   {
-    name: "Tacos", description: "Family favorite ground beef tacos", prepTimeMins: 25,
+    name: "Tacos", description: "Family favorite ground beef tacos", prepTimeMins: 25, category: "beef",
     ingredients: [
       { name: "Taco Shells", amount: "12", isPantryStaple: true },
       { name: "Ground Beef", amount: "1 lb", isPantryStaple: false },
@@ -405,7 +422,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Beef Burgers", description: "Juicy homemade burgers on the grill or stovetop", prepTimeMins: 20,
+    name: "Beef Burgers", description: "Juicy homemade burgers on the grill or stovetop", prepTimeMins: 20, category: "beef",
     ingredients: [
       { name: "Ground Beef", amount: "1.5 lbs", isPantryStaple: false },
       { name: "Hamburger Buns", amount: "1 pack", isPantryStaple: true },
@@ -415,7 +432,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Meatloaf", description: "Classic comfort meatloaf with glaze", prepTimeMins: 60,
+    name: "Meatloaf", description: "Classic comfort meatloaf with glaze", prepTimeMins: 60, category: "beef",
     ingredients: [
       { name: "Ground Beef", amount: "1.5 lbs", isPantryStaple: false },
       { name: "Eggs", amount: "2", isPantryStaple: false },
@@ -424,7 +441,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Beef Stew", description: "Hearty slow-cooked beef stew", prepTimeMins: 90,
+    name: "Beef Stew", description: "Hearty slow-cooked beef stew", prepTimeMins: 90, category: "beef",
     ingredients: [
       { name: "Beef Chuck", amount: "1.5 lbs", isPantryStaple: false },
       { name: "Potatoes", amount: "3 medium", isPantryStaple: false },
@@ -434,7 +451,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Stuffed Peppers", description: "Bell peppers stuffed with beef and rice", prepTimeMins: 45,
+    name: "Stuffed Peppers", description: "Bell peppers stuffed with beef and rice", prepTimeMins: 45, category: "beef",
     ingredients: [
       { name: "Bell Peppers", amount: "4 large", isPantryStaple: false },
       { name: "Ground Beef", amount: "1 lb", isPantryStaple: false },
@@ -443,7 +460,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Sloppy Joes", description: "Messy, delicious ground beef sandwiches", prepTimeMins: 20,
+    name: "Sloppy Joes", description: "Messy, delicious ground beef sandwiches", prepTimeMins: 20, category: "beef",
     ingredients: [
       { name: "Ground Beef", amount: "1 lb", isPantryStaple: false },
       { name: "Hamburger Buns", amount: "1 pack", isPantryStaple: true },
@@ -451,7 +468,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Korean Beef Bowls", description: "Sweet and savory ground beef over steamed rice", prepTimeMins: 20,
+    name: "Korean Beef Bowls", description: "Sweet and savory ground beef over steamed rice", prepTimeMins: 20, category: "beef",
     ingredients: [
       { name: "Ground Beef", amount: "1 lb", isPantryStaple: false },
       { name: "Rice", amount: "2 cups", isPantryStaple: true },
@@ -461,7 +478,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Beef and Broccoli", description: "Chinese-style beef and broccoli stir fry", prepTimeMins: 25,
+    name: "Beef and Broccoli", description: "Chinese-style beef and broccoli stir fry", prepTimeMins: 25, category: "beef",
     ingredients: [
       { name: "Flank Steak", amount: "1 lb", isPantryStaple: false },
       { name: "Broccoli", amount: "1 head", isPantryStaple: false },
@@ -471,7 +488,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Chili", description: "Thick and hearty beef chili", prepTimeMins: 40,
+    name: "Chili", description: "Thick and hearty beef chili", prepTimeMins: 40, category: "beef",
     ingredients: [
       { name: "Ground Beef", amount: "1 lb", isPantryStaple: false },
       { name: "Kidney Beans", amount: "2 cans", isPantryStaple: true },
@@ -482,7 +499,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
 
   // ── Pork ─────────────────────────────────────────────────────────
   {
-    name: "Sheet Pan Sausage & Veggies", description: "Zero cleanup roasted dinner", prepTimeMins: 35,
+    name: "Sheet Pan Sausage & Veggies", description: "Zero cleanup roasted dinner", prepTimeMins: 35, category: "pork",
     ingredients: [
       { name: "Smoked Sausage", amount: "14 oz", isPantryStaple: false },
       { name: "Bell Peppers", amount: "2", isPantryStaple: false },
@@ -491,7 +508,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Pork Chops with Apples", description: "Pan-seared pork chops with a sweet apple glaze", prepTimeMins: 30,
+    name: "Pork Chops with Apples", description: "Pan-seared pork chops with a sweet apple glaze", prepTimeMins: 30, category: "pork",
     ingredients: [
       { name: "Pork Chops", amount: "4", isPantryStaple: false },
       { name: "Apples", amount: "2", isPantryStaple: false },
@@ -500,7 +517,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Pulled Pork Sandwiches", description: "Slow cooker pulled pork on soft buns", prepTimeMins: 20,
+    name: "Pulled Pork Sandwiches", description: "Slow cooker pulled pork on soft buns", prepTimeMins: 20, category: "pork",
     ingredients: [
       { name: "Pork Shoulder", amount: "2 lbs", isPantryStaple: false },
       { name: "BBQ Sauce", amount: "1 cup", isPantryStaple: true },
@@ -509,7 +526,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Breakfast for Dinner", description: "Scrambled eggs, bacon, and toast — a family favorite", prepTimeMins: 20,
+    name: "Breakfast for Dinner", description: "Scrambled eggs, bacon, and toast — a family favorite", prepTimeMins: 20, category: "pork",
     ingredients: [
       { name: "Eggs", amount: "8", isPantryStaple: false },
       { name: "Bacon", amount: "1 lb", isPantryStaple: false },
@@ -520,7 +537,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
 
   // ── Fish & Seafood ────────────────────────────────────────────────
   {
-    name: "Salmon with Roasted Veggies", description: "Easy baked salmon on a sheet pan", prepTimeMins: 25,
+    name: "Salmon with Roasted Veggies", description: "Easy baked salmon on a sheet pan", prepTimeMins: 25, category: "seafood",
     ingredients: [
       { name: "Salmon Fillets", amount: "1.5 lbs", isPantryStaple: false },
       { name: "Broccoli", amount: "1 head", isPantryStaple: false },
@@ -529,7 +546,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Fish Tacos", description: "Light and fresh fish tacos with slaw", prepTimeMins: 25,
+    name: "Fish Tacos", description: "Light and fresh fish tacos with slaw", prepTimeMins: 25, category: "seafood",
     ingredients: [
       { name: "White Fish Fillets", amount: "1 lb", isPantryStaple: false },
       { name: "Flour Tortillas", amount: "1 pack", isPantryStaple: true },
@@ -538,7 +555,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Shrimp Stir Fry", description: "Quick shrimp and veggie stir fry over rice", prepTimeMins: 20,
+    name: "Shrimp Stir Fry", description: "Quick shrimp and veggie stir fry over rice", prepTimeMins: 20, category: "seafood",
     ingredients: [
       { name: "Shrimp", amount: "1 lb", isPantryStaple: false },
       { name: "Snap Peas", amount: "2 cups", isPantryStaple: false },
@@ -548,7 +565,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Tuna Noodle Casserole", description: "Classic comfort casserole kids love", prepTimeMins: 35,
+    name: "Tuna Noodle Casserole", description: "Classic comfort casserole kids love", prepTimeMins: 35, category: "seafood",
     ingredients: [
       { name: "Egg Noodles", amount: "2 cups", isPantryStaple: true },
       { name: "Tuna", amount: "2 cans", isPantryStaple: true },
@@ -557,7 +574,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Baked Cod with Lemon", description: "Simple flaky cod with herbs and lemon", prepTimeMins: 25,
+    name: "Baked Cod with Lemon", description: "Simple flaky cod with herbs and lemon", prepTimeMins: 25, category: "seafood",
     ingredients: [
       { name: "Cod Fillets", amount: "1.5 lbs", isPantryStaple: false },
       { name: "Lemon", amount: "2", isPantryStaple: false },
@@ -566,7 +583,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Shrimp Scampi Pasta", description: "Garlicky shrimp scampi with linguine", prepTimeMins: 20,
+    name: "Shrimp Scampi Pasta", description: "Garlicky shrimp scampi with linguine", prepTimeMins: 20, category: "seafood",
     ingredients: [
       { name: "Linguine Pasta", amount: "1 lb", isPantryStaple: true },
       { name: "Shrimp", amount: "1 lb", isPantryStaple: false },
@@ -578,7 +595,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
 
   // ── Vegetarian ───────────────────────────────────────────────────
   {
-    name: "Grilled Cheese & Soup", description: "Comfort food classic", prepTimeMins: 15,
+    name: "Grilled Cheese & Soup", description: "Comfort food classic", prepTimeMins: 15, category: "vegetarian",
     ingredients: [
       { name: "Bread", amount: "1 loaf", isPantryStaple: true },
       { name: "Cheese", amount: "8 slices", isPantryStaple: false },
@@ -586,7 +603,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Vegetable Curry", description: "Warm chickpea and veggie curry with naan", prepTimeMins: 30,
+    name: "Vegetable Curry", description: "Warm chickpea and veggie curry with naan", prepTimeMins: 30, category: "vegetarian",
     ingredients: [
       { name: "Chickpeas", amount: "2 cans", isPantryStaple: true },
       { name: "Diced Tomatoes", amount: "1 can", isPantryStaple: true },
@@ -596,7 +613,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Black Bean Tacos", description: "Meatless taco night with seasoned black beans", prepTimeMins: 15,
+    name: "Black Bean Tacos", description: "Meatless taco night with seasoned black beans", prepTimeMins: 15, category: "vegetarian",
     ingredients: [
       { name: "Black Beans", amount: "2 cans", isPantryStaple: true },
       { name: "Taco Shells", amount: "12", isPantryStaple: true },
@@ -606,7 +623,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Caprese Pasta", description: "Fresh mozzarella and tomato pasta", prepTimeMins: 20,
+    name: "Caprese Pasta", description: "Fresh mozzarella and tomato pasta", prepTimeMins: 20, category: "vegetarian",
     ingredients: [
       { name: "Penne Pasta", amount: "1 lb", isPantryStaple: true },
       { name: "Cherry Tomatoes", amount: "1 pint", isPantryStaple: false },
@@ -616,7 +633,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Minestrone Soup", description: "Hearty Italian vegetable soup", prepTimeMins: 35,
+    name: "Minestrone Soup", description: "Hearty Italian vegetable soup", prepTimeMins: 35, category: "soup",
     ingredients: [
       { name: "Diced Tomatoes", amount: "2 cans", isPantryStaple: true },
       { name: "Kidney Beans", amount: "1 can", isPantryStaple: true },
@@ -626,7 +643,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Cheese Quesadillas", description: "Crispy quesadillas with salsa and sour cream", prepTimeMins: 15,
+    name: "Cheese Quesadillas", description: "Crispy quesadillas with salsa and sour cream", prepTimeMins: 15, category: "vegetarian",
     ingredients: [
       { name: "Flour Tortillas", amount: "1 pack", isPantryStaple: true },
       { name: "Shredded Cheese", amount: "2 cups", isPantryStaple: false },
@@ -635,7 +652,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Veggie Stir Fry", description: "Colorful vegetable stir fry over rice", prepTimeMins: 20,
+    name: "Veggie Stir Fry", description: "Colorful vegetable stir fry over rice", prepTimeMins: 20, category: "vegetarian",
     ingredients: [
       { name: "Broccoli", amount: "1 head", isPantryStaple: false },
       { name: "Bell Peppers", amount: "2", isPantryStaple: false },
@@ -647,7 +664,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
 
   // ── Soups & Stews ────────────────────────────────────────────────
   {
-    name: "Tomato Basil Soup", description: "Creamy homemade tomato soup with crusty bread", prepTimeMins: 25,
+    name: "Tomato Basil Soup", description: "Creamy homemade tomato soup with crusty bread", prepTimeMins: 25, category: "soup",
     ingredients: [
       { name: "Crushed Tomatoes", amount: "28 oz can", isPantryStaple: true },
       { name: "Heavy Cream", amount: "½ cup", isPantryStaple: false },
@@ -656,7 +673,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Potato Soup", description: "Thick and creamy loaded potato soup", prepTimeMins: 30,
+    name: "Potato Soup", description: "Thick and creamy loaded potato soup", prepTimeMins: 30, category: "soup",
     ingredients: [
       { name: "Russet Potatoes", amount: "4 large", isPantryStaple: false },
       { name: "Bacon", amount: "½ lb", isPantryStaple: false },
@@ -666,7 +683,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Corn Chowder", description: "Sweet and savory corn and potato chowder", prepTimeMins: 30,
+    name: "Corn Chowder", description: "Sweet and savory corn and potato chowder", prepTimeMins: 30, category: "soup",
     ingredients: [
       { name: "Frozen Corn", amount: "2 cups", isPantryStaple: false },
       { name: "Potatoes", amount: "2 medium", isPantryStaple: false },
@@ -676,7 +693,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Lentil Soup", description: "Warming and nutritious lentil soup", prepTimeMins: 35,
+    name: "Lentil Soup", description: "Warming and nutritious lentil soup", prepTimeMins: 35, category: "soup",
     ingredients: [
       { name: "Green Lentils", amount: "1 lb bag", isPantryStaple: true },
       { name: "Carrots", amount: "3", isPantryStaple: false },
@@ -688,7 +705,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
 
   // ── Quick & Easy ─────────────────────────────────────────────────
   {
-    name: "BLT Wraps", description: "Bacon, lettuce, and tomato in a flour wrap", prepTimeMins: 15,
+    name: "BLT Wraps", description: "Bacon, lettuce, and tomato in a flour wrap", prepTimeMins: 15, category: "quick",
     ingredients: [
       { name: "Bacon", amount: "1 lb", isPantryStaple: false },
       { name: "Flour Tortillas", amount: "1 pack", isPantryStaple: true },
@@ -698,7 +715,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Hot Dogs with Baked Beans", description: "Classic cookout dinner on a weeknight", prepTimeMins: 15,
+    name: "Hot Dogs with Baked Beans", description: "Classic cookout dinner on a weeknight", prepTimeMins: 15, category: "quick",
     ingredients: [
       { name: "Hot Dogs", amount: "1 pack", isPantryStaple: false },
       { name: "Hot Dog Buns", amount: "1 pack", isPantryStaple: true },
@@ -706,7 +723,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Pancakes for Dinner", description: "Fluffy pancakes with syrup — kids love it", prepTimeMins: 20,
+    name: "Pancakes for Dinner", description: "Fluffy pancakes with syrup — kids love it", prepTimeMins: 20, category: "quick",
     ingredients: [
       { name: "Pancake Mix", amount: "1 box", isPantryStaple: true },
       { name: "Eggs", amount: "2", isPantryStaple: false },
@@ -715,7 +732,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Rotisserie Chicken Bowls", description: "Easy bowls with store-bought rotisserie chicken", prepTimeMins: 15,
+    name: "Rotisserie Chicken Bowls", description: "Easy bowls with store-bought rotisserie chicken", prepTimeMins: 15, category: "quick",
     ingredients: [
       { name: "Rotisserie Chicken", amount: "1 whole", isPantryStaple: false },
       { name: "Rice", amount: "2 cups", isPantryStaple: true },
@@ -725,7 +742,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Nachos", description: "Sheet pan loaded nachos, great for busy nights", prepTimeMins: 20,
+    name: "Nachos", description: "Sheet pan loaded nachos, great for busy nights", prepTimeMins: 20, category: "quick",
     ingredients: [
       { name: "Tortilla Chips", amount: "1 large bag", isPantryStaple: true },
       { name: "Ground Beef", amount: "1 lb", isPantryStaple: false },
@@ -735,7 +752,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Teriyaki Salmon Bowls", description: "Glazed salmon over rice with cucumber", prepTimeMins: 25,
+    name: "Teriyaki Salmon Bowls", description: "Glazed salmon over rice with cucumber", prepTimeMins: 25, category: "seafood",
     ingredients: [
       { name: "Salmon Fillets", amount: "1.5 lbs", isPantryStaple: false },
       { name: "Teriyaki Sauce", amount: "½ cup", isPantryStaple: true },
@@ -744,7 +761,7 @@ const ALL_SEED_MEALS: SeedMeal[] = [
     ]
   },
   {
-    name: "Pork Fried Rice", description: "Quick fried rice with leftover pork", prepTimeMins: 20,
+    name: "Pork Fried Rice", description: "Quick fried rice with leftover pork", prepTimeMins: 20, category: "pork",
     ingredients: [
       { name: "Ground Pork", amount: "1 lb", isPantryStaple: false },
       { name: "Cooked Rice", amount: "3 cups", isPantryStaple: true },
@@ -762,7 +779,7 @@ export async function seedDatabase() {
   for (const meal of ALL_SEED_MEALS) {
     if (!existingNames.has(meal.name)) {
       await storage.createMeal(
-        { name: meal.name, description: meal.description, prepTimeMins: meal.prepTimeMins, isPreset: true },
+        { name: meal.name, description: meal.description, prepTimeMins: meal.prepTimeMins, isPreset: true, category: meal.category as any },
         meal.ingredients
       );
     }

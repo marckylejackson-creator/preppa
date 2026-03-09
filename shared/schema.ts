@@ -2,6 +2,13 @@ import { pgTable, serial, text, boolean, integer, timestamp } from "drizzle-orm/
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Category values used for fuzzy preference tracking
+export const MEAL_CATEGORIES = [
+  "pasta", "chicken", "beef", "pork", "seafood",
+  "vegetarian", "soup", "quick", "other"
+] as const;
+export type MealCategory = typeof MEAL_CATEGORIES[number];
+
 // Base table for meals (both preset and user-created)
 export const meals = pgTable("meals", {
   id: serial("id").primaryKey(),
@@ -10,6 +17,7 @@ export const meals = pgTable("meals", {
   prepTimeMins: integer("prep_time_mins").notNull(),
   isPreset: boolean("is_preset").default(false).notNull(),
   userId: text("user_id"), // null if preset
+  category: text("category").$type<MealCategory>().default("other").notNull(),
 });
 
 export const mealIngredients = pgTable("meal_ingredients", {
@@ -47,6 +55,17 @@ export const groceryLists = pgTable("grocery_lists", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Tracks every swap action for preference learning
+export const swapEvents = pgTable("swap_events", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull(),
+  rejectedMealId: integer("rejected_meal_id").notNull(),
+  acceptedMealId: integer("accepted_meal_id").notNull(),
+  rejectedCategory: text("rejected_category").$type<MealCategory>().notNull(),
+  acceptedCategory: text("accepted_category").$type<MealCategory>().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const groceryListItems = pgTable("grocery_list_items", {
   id: serial("id").primaryKey(),
   listId: integer("list_id").notNull(),
@@ -80,3 +99,5 @@ export type InsertMealPlanMeal = z.infer<typeof insertMealPlanMealSchema>;
 
 export type GroceryList = typeof groceryLists.$inferSelect;
 export type GroceryListItem = typeof groceryListItems.$inferSelect;
+
+export type SwapEvent = typeof swapEvents.$inferSelect;

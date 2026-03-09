@@ -1,9 +1,9 @@
 import { db } from "./db";
 import { 
-  meals, mealIngredients, pantryItems, mealPlans, mealPlanMeals, groceryLists, groceryListItems,
-  type InsertMeal, type InsertPantryItem, type InsertMealIngredient
+  meals, mealIngredients, pantryItems, mealPlans, mealPlanMeals, groceryLists, groceryListItems, swapEvents,
+  type InsertMeal, type InsertPantryItem, type InsertMealIngredient, type MealCategory
 } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte } from "drizzle-orm";
 
 export interface IStorage {
   // Meals
@@ -21,6 +21,10 @@ export interface IStorage {
   getMealPlanHistory(userId: string, limit?: number): Promise<any[]>;
   swapMealInPlan(planId: number, day: string, newMealId: number): Promise<void>;
   getSwapOptions(userId: string, excludeMealIds: number[]): Promise<any[]>;
+
+  // Swap event tracking
+  recordSwapEvent(userId: string, rejectedMealId: number, acceptedMealId: number): Promise<void>;
+  getWeeklyRejectedCategories(userId: string): Promise<{ category: MealCategory; count: number }[]>;
   
   // Grocery Lists
   getCurrentGroceryList(userId: string): Promise<any | null>;
@@ -145,6 +149,45 @@ export class DatabaseStorage implements IStorage {
     if (!list) return null;
     const items = await db.select().from(groceryListItems).where(eq(groceryListItems.listId, list.id));
     return { ...list, items };
+  }
+
+  async recordSwapEvent(userId: string, rejectedMealId: number, acceptedMealId: number) {
+    const [rejected] = await db.select().from(meals).where(eq(meals.id, rejectedMealId));
+    const [accepted] = await db.select().from(meals).where(eq(meals.id, acceptedMealId));
+    if (!rejected || !accepted) return;
+    await db.insert(swapEvents).values({
+      userId,
+      rejectedMealId,
+      acceptedMealId,
+      rejectedCategory: (rejected.category ?? "other") as MealCategory,
+      acceptedCategory: (accepted.category ?? "other") as MealCategory,
+    });
+  }
+
+  async getWeeklyRejectedCategories(userId: string): Promise<{ category: MealCategory; count: number }[]> {
+    // Start of current ISO week (Monday)
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0=Sun
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - daysFromMonday);
+    monday.setHours(0, 0, 0, 0);
+
+    const events = await db.select()
+      .from(swapEvents)
+      .where(and(
+        eq(swapEvents.userId, userId),
+        gte(swapEvents.createdAt, monday)
+      ));
+
+    const counts: Record<string, number> = {};
+    for (const e of events) {
+      counts[e.rejectedCategory] = (counts[e.rejectedCategory] ?? 0) + 1;
+    }
+
+    return Object.entries(counts)
+      .map(([category, count]) => ({ category: category as MealCategory, count }))
+      .sort((a, b) => b.count - a.count);
   }
 }
 
