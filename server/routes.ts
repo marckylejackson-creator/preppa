@@ -79,17 +79,17 @@ export async function registerRoutes(
       const pantryItems = await storage.getPantryItems(userId);
       
       const prompt = `
-      You are an AI meal planner. Create a 5-day weeknight meal plan (Monday to Friday).
+      You are an AI meal planner for busy families. Create a 5-day weeknight meal plan (Monday to Friday).
       
-      Available Meals:
-      ${JSON.stringify(meals.map(m => ({ id: m.id, name: m.name, prepTime: m.prepTimeMins, ingredients: m.ingredients.map((i: any) => i.name) })))}
-      
-      User's Pantry Items:
-      ${JSON.stringify(pantryItems.map(p => p.name))}
+      Available Meals (with their ingredients):
+      ${JSON.stringify(meals.map(m => ({ id: m.id, name: m.name, prepTime: m.prepTimeMins, ingredients: m.ingredients.map((i: any) => ({ name: i.name, amount: i.amount, isPantryStaple: i.isPantryStaple })) })))}
       
       Instructions:
-      1. Pick exactly 5 meals from the available meals list, prioritizing ones that use ingredients the user already has in their pantry.
-      2. Return a JSON object with this exact structure:
+      1. Pick exactly 5 meals from the available meals list.
+      2. For the grocery list, consolidate ALL ingredients across all 5 meals. Combine duplicates and sum quantities.
+      3. For each grocery item, produce a "storeUnit" that describes exactly what to pick up at the store (e.g. "1 lb pack", "2 cans (14.5 oz each)", "1 bunch", "1 head", "1 bag (8 oz)"). This should reflect how the item is sold, not just a recipe measurement.
+      4. Classify each ingredient as a "pantryStaple" if it is a common household pantry item (e.g. olive oil, salt, pepper, soy sauce, taco seasoning, pasta, rice, canned tomatoes, flour, sugar, garlic powder, etc.).
+      5. Return a JSON object with this exact structure:
       {
         "plan": [
           {"dayOfWeek": "Monday", "mealId": 1},
@@ -97,6 +97,12 @@ export async function registerRoutes(
           {"dayOfWeek": "Wednesday", "mealId": 3},
           {"dayOfWeek": "Thursday", "mealId": 4},
           {"dayOfWeek": "Friday", "mealId": 5}
+        ],
+        "groceryItems": [
+          {"name": "Ground Beef", "storeUnit": "2 lbs", "isPantryStaple": false},
+          {"name": "Broccoli", "storeUnit": "1 head", "isPantryStaple": false},
+          {"name": "Olive Oil", "storeUnit": "1 bottle (16 oz)", "isPantryStaple": true},
+          {"name": "Soy Sauce", "storeUnit": "1 bottle (10 oz)", "isPantryStaple": true}
         ]
       }
       Only return valid JSON. Do not return markdown blocks or any other text.
@@ -114,19 +120,11 @@ export async function registerRoutes(
       const parsed = JSON.parse(content);
       const plan = await storage.createMealPlan(userId, parsed.plan);
       
-      // Generate grocery list based on the new plan and pantry
-      const neededIngredients = new Set<string>();
-      for (const pm of plan.meals) {
-        for (const ing of pm.meal.ingredients) {
-          if (!ing.isPantryStaple) {
-            neededIngredients.add(ing.name.toLowerCase());
-          }
-        }
-      }
-      
-      // Remove what they already have
-      const pantrySet = new Set(pantryItems.map(p => p.name.toLowerCase()));
-      const toBuy = Array.from(neededIngredients).filter(i => !pantrySet.has(i)).map(name => ({ name }));
+      const toBuy = (parsed.groceryItems || []).map((item: any) => ({
+        name: item.name,
+        storeUnit: item.storeUnit,
+        isPantryStaple: item.isPantryStaple ?? false,
+      }));
       
       await storage.createGroceryList(userId, plan.id, toBuy);
       

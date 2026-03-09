@@ -50,6 +50,8 @@ export const groceryListItems = pgTable("grocery_list_items", {
   id: serial("id").primaryKey(),
   listId: integer("list_id").notNull(),
   name: text("name").notNull(),
+  storeUnit: text("store_unit"), // e.g. "1 pack (16 oz)", "2 cans (14.5 oz each)"
+  isPantryStaple: boolean("is_pantry_staple").default(false).notNull(),
   isChecked: boolean("is_checked").default(false).notNull(),
 });
 

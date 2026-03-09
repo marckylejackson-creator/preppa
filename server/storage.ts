@@ -91,10 +91,10 @@ export class DatabaseStorage implements IStorage {
     return { ...list, items };
   }
   
-  async createGroceryList(userId: string, planId: number, items: { name: string }[]) {
+  async createGroceryList(userId: string, planId: number, items: { name: string, storeUnit?: string, isPantryStaple?: boolean }[]) {
     const [list] = await db.insert(groceryLists).values({ userId, planId }).returning();
     if (items.length > 0) {
-      const vals = items.map(i => ({ listId: list.id, name: i.name, isChecked: false }));
+      const vals = items.map(i => ({ listId: list.id, name: i.name, storeUnit: i.storeUnit ?? null, isPantryStaple: i.isPantryStaple ?? false, isChecked: false }));
       await db.insert(groceryListItems).values(vals);
     }
     return this.getCurrentGroceryList(userId);
