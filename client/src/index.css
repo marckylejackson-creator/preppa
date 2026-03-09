@@ -1,66 +1,66 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Outfit:wght@100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --font-sans: 'DM Sans', sans-serif;
-  --font-display: 'Outfit', sans-serif;
+  --font-sans: 'Manrope', sans-serif;
+  --font-display: 'Manrope', sans-serif;
 
-  /* Clean Minimal & Editorial Palette */
-  --background: 40 33% 98%;      /* Warm off-white */
-  --foreground: 20 20% 12%;      /* Soft black */
-  
-  --card: 0 0% 100%;             /* Pure white */
-  --card-foreground: 20 20% 12%;
-  --card-border: 40 15% 90%;
-  
-  --primary: 152 40% 38%;        /* Muted Sage Green */
+  /* Preppa Brand Palette */
+  --background: 36 18% 94%;       /* #F3F1EE — Soft Off-White */
+  --foreground: 0 0% 11%;         /* #1C1C1C — Charcoal */
+
+  --card: 0 0% 100%;              /* Pure white */
+  --card-foreground: 0 0% 11%;
+  --card-border: 28 12% 88%;
+
+  --primary: 12 64% 52%;          /* #D35636 — Preppa Orange */
   --primary-foreground: 0 0% 100%;
-  
-  --secondary: 40 15% 94%;       /* Light warm gray */
-  --secondary-foreground: 20 20% 25%;
-  
-  --muted: 40 10% 94%;
-  --muted-foreground: 20 10% 45%;
-  
-  --accent: 35 40% 92%;          /* Very soft warm beige */
-  --accent-foreground: 20 20% 15%;
-  
+
+  --secondary: 28 15% 88%;        /* Warm Gray, slightly lighter */
+  --secondary-foreground: 0 0% 18%;
+
+  --muted: 28 12% 92%;
+  --muted-foreground: 28 8% 48%;
+
+  --accent: 12 70% 95%;           /* Very light orange tint for accent panels */
+  --accent-foreground: 0 0% 11%;
+
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
-  
-  --border: 40 15% 90%;
-  --input: 40 15% 92%;
-  --ring: 152 40% 38%;
+
+  --border: 28 12% 87%;
+  --input: 28 12% 91%;
+  --ring: 12 64% 52%;
 
   --radius: 1rem;
 }
 
 .dark {
-  --background: 20 15% 10%;
-  --foreground: 40 20% 95%;
-  
-  --card: 20 15% 12%;
-  --card-foreground: 40 20% 95%;
-  --card-border: 20 10% 20%;
-  
-  --primary: 152 40% 45%;
+  --background: 20 8% 10%;
+  --foreground: 36 18% 93%;
+
+  --card: 20 8% 13%;
+  --card-foreground: 36 18% 93%;
+  --card-border: 20 8% 20%;
+
+  --primary: 12 64% 58%;
   --primary-foreground: 0 0% 100%;
-  
-  --secondary: 20 10% 20%;
-  --secondary-foreground: 40 20% 90%;
-  
-  --muted: 20 10% 18%;
-  --muted-foreground: 40 10% 65%;
-  
-  --accent: 35 20% 20%;
-  --accent-foreground: 40 20% 90%;
-  
-  --border: 20 10% 20%;
-  --input: 20 10% 22%;
-  --ring: 152 40% 45%;
+
+  --secondary: 20 8% 20%;
+  --secondary-foreground: 36 15% 88%;
+
+  --muted: 20 8% 18%;
+  --muted-foreground: 28 8% 58%;
+
+  --accent: 12 30% 18%;
+  --accent-foreground: 36 18% 93%;
+
+  --border: 20 8% 22%;
+  --input: 20 8% 22%;
+  --ring: 12 64% 58%;
 }
 
 @layer base {
@@ -71,7 +71,7 @@
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
-    @apply font-semibold tracking-tight text-foreground;
+    @apply font-bold tracking-tight text-foreground;
   }
 }
 
@@ -79,11 +79,11 @@
   .glass-panel {
     @apply bg-white/70 dark:bg-black/50 backdrop-blur-xl border border-white/20 dark:border-white/10 shadow-lg shadow-black/5;
   }
-  
+
   .premium-shadow {
-    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05), 0 0 3px rgba(0,0,0,0.02);
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.06), 0 0 3px rgba(0, 0, 0, 0.03);
   }
-  
+
   .hover-elevate {
     @apply transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-xl hover:shadow-black/10;
   }
