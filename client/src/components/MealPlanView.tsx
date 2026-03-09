@@ -40,6 +40,7 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.mealPlans.current.path] });
+      queryClient.invalidateQueries({ queryKey: [api.groceryLists.current.path] });
       setSwappingDay(null);
     },
     onError: () => {

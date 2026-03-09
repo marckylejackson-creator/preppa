@@ -129,7 +129,7 @@ Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, a
     res.json(options);
   });
 
-  // Instant swap — records swap event for preference learning, updates the day's meal
+  // Instant swap — records swap event, updates the day's meal, and syncs the grocery list
   app.patch(api.mealPlans.swap.path, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -137,7 +137,7 @@ Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, a
       const plan = await storage.getCurrentMealPlan(userId);
       if (!plan) return res.status(404).json({ message: "No active plan" });
 
-      // Find the meal being replaced so we can record it as rejected
+      // Capture old meal before swap for grocery diffing
       const dayMeal = plan.meals.find((m: any) => m.dayOfWeek === input.day);
       if (dayMeal) {
         await storage.recordSwapEvent(userId, dayMeal.mealId, input.newMealId);
@@ -146,6 +146,48 @@ Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, a
       await storage.swapMealInPlan(plan.id, input.day, input.newMealId);
       const updatedPlan = await storage.getCurrentMealPlan(userId);
       if (!updatedPlan) throw new Error("Plan not found after swap");
+
+      // ── Grocery list sync ──────────────────────────────────────────────
+      const groceryList = await storage.getCurrentGroceryList(userId);
+      if (groceryList && dayMeal) {
+        // All ingredient names still in the updated plan
+        const remainingIngredientNames = new Set(
+          updatedPlan.meals.flatMap((m: any) =>
+            m.meal.ingredients.map((i: any) => i.name.toLowerCase())
+          )
+        );
+
+        // Remove items whose name only appeared in the old meal
+        const oldIngredientNames = new Set(
+          (dayMeal.meal.ingredients as any[]).map((i: any) => i.name.toLowerCase())
+        );
+        for (const item of groceryList.items as any[]) {
+          if (
+            oldIngredientNames.has(item.name.toLowerCase()) &&
+            !remainingIngredientNames.has(item.name.toLowerCase())
+          ) {
+            await storage.removeGroceryItem(item.id);
+          }
+        }
+
+        // Add new meal's ingredients that aren't already in the list
+        const existingNames = new Set(
+          (groceryList.items as any[]).map((i: any) => i.name.toLowerCase())
+        );
+        const newMeal = await storage.getMealById(input.newMealId);
+        if (newMeal) {
+          for (const ing of newMeal.ingredients as any[]) {
+            if (!existingNames.has(ing.name.toLowerCase())) {
+              await storage.addGroceryItem(groceryList.id, {
+                name: ing.name,
+                storeUnit: ing.amount ?? null,
+                isPantryStaple: ing.isPantryStaple ?? false,
+              });
+            }
+          }
+        }
+      }
+      // ──────────────────────────────────────────────────────────────────
 
       res.json(updatedPlan);
     } catch (err) {

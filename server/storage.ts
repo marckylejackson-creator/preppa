@@ -33,6 +33,8 @@ export interface IStorage {
   createGroceryList(userId: string, planId: number, items: { name: string }[]): Promise<any>;
   toggleGroceryItem(id: number, isChecked: boolean): Promise<any>;
   getGroceryListByPlanId(planId: number): Promise<any | null>;
+  removeGroceryItem(id: number): Promise<void>;
+  addGroceryItem(listId: number, item: { name: string; storeUnit?: string | null; isPantryStaple?: boolean }): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -141,6 +143,21 @@ export class DatabaseStorage implements IStorage {
   async toggleGroceryItem(id: number, isChecked: boolean) {
     const [item] = await db.update(groceryListItems).set({ isChecked }).where(eq(groceryListItems.id, id)).returning();
     return item;
+  }
+
+  async removeGroceryItem(id: number) {
+    await db.delete(groceryListItems).where(eq(groceryListItems.id, id));
+  }
+
+  async addGroceryItem(listId: number, item: { name: string; storeUnit?: string | null; isPantryStaple?: boolean }) {
+    const [newItem] = await db.insert(groceryListItems).values({
+      listId,
+      name: item.name,
+      storeUnit: item.storeUnit ?? null,
+      isPantryStaple: item.isPantryStaple ?? false,
+      isChecked: false,
+    }).returning();
+    return newItem;
   }
 
   async swapMealInPlan(planId: number, day: string, newMealId: number) {
