@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, UtensilsCrossed, LayoutDashboard, History } from "lucide-react";
+import { LogOut, UtensilsCrossed, LayoutDashboard, History, BookOpen } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 export function Navbar() {
@@ -8,6 +8,7 @@ export function Navbar() {
 
   const navLinks = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/meals", label: "Meals", icon: BookOpen },
     { href: "/history", label: "History", icon: History },
   ];
 
