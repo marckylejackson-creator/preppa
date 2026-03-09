@@ -81,7 +81,7 @@ export async function registerRoutes(
     res.json(options);
   });
 
-  // Swap a single meal in the current plan and regenerate grocery list
+  // Instant swap — just update the day's meal, no AI, no grocery list regeneration
   app.patch(api.mealPlans.swap.path, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -92,48 +92,6 @@ export async function registerRoutes(
       await storage.swapMealInPlan(plan.id, input.day, input.newMealId);
       const updatedPlan = await storage.getCurrentMealPlan(userId);
       if (!updatedPlan) throw new Error("Plan not found after swap");
-
-      // Regenerate grocery list via AI for accurate store units
-      const mealsList = updatedPlan.meals.map((m: any) => ({
-        name: m.meal.name,
-        ingredients: m.meal.ingredients.map((i: any) => ({
-          name: i.name, amount: i.amount, isPantryStaple: i.isPantryStaple
-        }))
-      }));
-
-      const prompt = `
-You are an AI meal planner. The family's 5-meal plan for the week has been updated.
-
-Updated meals: ${JSON.stringify(mealsList)}
-
-Generate a consolidated grocery list. Combine duplicate ingredients across meals and sum quantities.
-
-For each item:
-- "storeUnit": how it's sold at the store (e.g. "2 lbs", "1 head", "1 can (14.5 oz)", "1 box (16 oz)")
-- "isPantryStaple": true if it's a common pantry item families likely already own (olive oil, soy sauce, pasta, rice, canned goods, spices, taco shells, bread, etc.)
-
-Return JSON only:
-{
-  "groceryItems": [
-    {"name": "Ground Beef", "storeUnit": "2 lbs", "isPantryStaple": false},
-    {"name": "Olive Oil", "storeUnit": "1 bottle (16 oz)", "isPantryStaple": true}
-  ]
-}`;
-
-      const aiRes = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" }
-      });
-
-      const content = aiRes.choices[0].message.content;
-      if (!content) throw new Error("No AI content");
-
-      const parsed = JSON.parse(content);
-      // Delete old grocery list and create new one
-      await storage.createGroceryList(userId, plan.id, (parsed.groceryItems || []).map((i: any) => ({
-        name: i.name, storeUnit: i.storeUnit, isPantryStaple: i.isPantryStaple ?? false
-      })));
 
       res.json(updatedPlan);
     } catch (err) {

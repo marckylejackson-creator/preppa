@@ -171,7 +171,7 @@ export default function GuestDashboard() {
                     initial={{ opacity: 0, x: -16 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: idx * 0.06 }}
-                    className="flex items-center gap-3 p-3 rounded-2xl bg-secondary/30 border border-border/40 group"
+                    className="flex items-center gap-3 p-3 rounded-2xl bg-secondary/30 border border-border/40"
                   >
                     <div className="w-20 shrink-0 font-display font-semibold text-sm text-muted-foreground">{day}</div>
                     <div className="flex-1 bg-card px-3 py-2 rounded-xl border border-border/50 min-w-0">
@@ -183,7 +183,7 @@ export default function GuestDashboard() {
                     <button
                       onClick={handleGuestAction}
                       data-testid={`button-guest-swap-${day.toLowerCase()}`}
-                      className="shrink-0 p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border/50 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                      className="shrink-0 p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border/50 transition-all"
                       title="Swap meal (sign up required)"
                     >
                       <ArrowRightLeft size={15} />
