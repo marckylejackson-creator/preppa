@@ -75,37 +75,72 @@ export async function registerRoutes(
   app.post(api.mealPlans.generate.path, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const meals = await storage.getMeals(userId);
-      const pantryItems = await storage.getPantryItems(userId);
-      
+      const availableMeals = await storage.getMeals(userId);
+      const recentHistory = await storage.getMealPlanHistory(userId, 4);
+
+      // Compute the Monday of the upcoming week to use as weekOf
+      const now = new Date();
+      const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon...
+      const daysUntilMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+      const nextMonday = new Date(now);
+      nextMonday.setDate(now.getDate() + daysUntilMonday);
+      const weekOf = nextMonday.toISOString().split("T")[0];
+
+      // Summarize recent history for the AI
+      const historyContext = recentHistory.length === 0
+        ? "No previous meal plans."
+        : recentHistory.map((h: any, idx: number) => {
+            const weekLabel = idx === 0 ? "Last week" : `${idx + 1} weeks ago`;
+            const mealNames = h.meals.map((m: any) => m.meal.name).join(", ");
+            return `${weekLabel}: ${mealNames}`;
+          }).join("\n");
+
+      // Recent non-pantry-staple grocery items bought (likely still partly available)
+      const recentGroceries = recentHistory.length > 0
+        ? await storage.getGroceryListByPlanId(recentHistory[0].id)
+        : null;
+
+      const recentlyBought = recentGroceries
+        ? recentGroceries.items
+            .filter((i: any) => !i.isPantryStaple)
+            .map((i: any) => i.name)
+            .join(", ")
+        : "None";
+
       const prompt = `
-      You are an AI meal planner for busy families. Create a 5-day weeknight meal plan (Monday to Friday).
-      
-      Available Meals (with their ingredients):
-      ${JSON.stringify(meals.map(m => ({ id: m.id, name: m.name, prepTime: m.prepTimeMins, ingredients: m.ingredients.map((i: any) => ({ name: i.name, amount: i.amount, isPantryStaple: i.isPantryStaple })) })))}
-      
-      Instructions:
-      1. Pick exactly 5 meals from the available meals list.
-      2. For the grocery list, consolidate ALL ingredients across all 5 meals. Combine duplicates and sum quantities.
-      3. For each grocery item, produce a "storeUnit" that describes exactly what to pick up at the store (e.g. "1 lb pack", "2 cans (14.5 oz each)", "1 bunch", "1 head", "1 bag (8 oz)"). This should reflect how the item is sold, not just a recipe measurement.
-      4. Classify each ingredient as a "pantryStaple" if it is a common household pantry item (e.g. olive oil, salt, pepper, soy sauce, taco seasoning, pasta, rice, canned tomatoes, flour, sugar, garlic powder, etc.).
-      5. Return a JSON object with this exact structure:
-      {
-        "plan": [
-          {"dayOfWeek": "Monday", "mealId": 1},
-          {"dayOfWeek": "Tuesday", "mealId": 2},
-          {"dayOfWeek": "Wednesday", "mealId": 3},
-          {"dayOfWeek": "Thursday", "mealId": 4},
-          {"dayOfWeek": "Friday", "mealId": 5}
-        ],
-        "groceryItems": [
-          {"name": "Ground Beef", "storeUnit": "2 lbs", "isPantryStaple": false},
-          {"name": "Broccoli", "storeUnit": "1 head", "isPantryStaple": false},
-          {"name": "Olive Oil", "storeUnit": "1 bottle (16 oz)", "isPantryStaple": true},
-          {"name": "Soy Sauce", "storeUnit": "1 bottle (10 oz)", "isPantryStaple": true}
-        ]
-      }
-      Only return valid JSON. Do not return markdown blocks or any other text.
+You are an AI meal planner for busy working families. Create a 5-day weeknight meal plan (Monday to Friday) for the week of ${weekOf}.
+
+Available Meals (with their ingredients):
+${JSON.stringify(availableMeals.map(m => ({ id: m.id, name: m.name, prepTime: m.prepTimeMins, ingredients: m.ingredients.map((i: any) => ({ name: i.name, amount: i.amount, isPantryStaple: i.isPantryStaple })) })))}
+
+Recent meal history (avoid repeating meals from the past 2 weeks):
+${historyContext}
+
+Non-staple groceries recently purchased (these may still be partly available at home — try to use them up this week where it makes sense):
+${recentlyBought}
+
+Instructions:
+1. Pick exactly 5 meals from the available meals list. Avoid repeating any meal that appeared in the LAST week's plan. Try to use up recently-bought ingredients where logical.
+2. For the grocery list, consolidate ALL ingredients across all 5 meals. Combine duplicates and sum quantities. For ingredients likely still available from last week, reduce the quantity or omit if a full pack was recently purchased.
+3. For each grocery item, produce a "storeUnit" that describes exactly what to pick up at the store (e.g. "1 lb pack", "2 cans (14.5 oz each)", "1 bunch", "1 head", "1 bag (8 oz)"). This should reflect how the item is sold at a grocery store.
+4. Classify each item as a "pantryStaple" if it is a common household pantry item that families typically already own (olive oil, soy sauce, taco seasoning, pasta, rice, canned tomatoes, flour, sugar, salt, pepper, garlic powder, etc.).
+5. Return a JSON object with this exact structure:
+{
+  "plan": [
+    {"dayOfWeek": "Monday", "mealId": 1},
+    {"dayOfWeek": "Tuesday", "mealId": 2},
+    {"dayOfWeek": "Wednesday", "mealId": 3},
+    {"dayOfWeek": "Thursday", "mealId": 4},
+    {"dayOfWeek": "Friday", "mealId": 5}
+  ],
+  "groceryItems": [
+    {"name": "Ground Beef", "storeUnit": "2 lbs", "isPantryStaple": false},
+    {"name": "Broccoli", "storeUnit": "1 head", "isPantryStaple": false},
+    {"name": "Olive Oil", "storeUnit": "1 bottle (16 oz)", "isPantryStaple": true},
+    {"name": "Soy Sauce", "storeUnit": "1 bottle (10 oz)", "isPantryStaple": true}
+  ]
+}
+Only return valid JSON. Do not return markdown blocks or any other text.
       `;
 
       const aiRes = await openai.chat.completions.create({
@@ -118,7 +153,7 @@ export async function registerRoutes(
       if (!content) throw new Error("No content from AI");
       
       const parsed = JSON.parse(content);
-      const plan = await storage.createMealPlan(userId, parsed.plan);
+      const plan = await storage.createMealPlan(userId, parsed.plan, weekOf);
       
       const toBuy = (parsed.groceryItems || []).map((item: any) => ({
         name: item.name,
@@ -149,6 +184,16 @@ export async function registerRoutes(
     } catch (err) {
       res.status(400).json({ message: "Invalid input" });
     }
+  });
+
+  app.get(api.history.get.path, isAuthenticated, async (req: any, res) => {
+    const userId = req.user.claims.sub;
+    const plans = await storage.getMealPlanHistory(userId, 12);
+    const result = await Promise.all(plans.map(async (plan: any) => {
+      const groceryList = await storage.getGroceryListByPlanId(plan.id);
+      return { plan, groceryList };
+    }));
+    res.json(result);
   });
 
   // Seed DB with some defaults

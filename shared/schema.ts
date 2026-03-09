@@ -29,6 +29,7 @@ export const pantryItems = pgTable("pantry_items", {
 export const mealPlans = pgTable("meal_plans", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),
+  weekOf: text("week_of"), // ISO date string of the Monday the plan is for e.g. "2026-03-10"
   createdAt: timestamp("created_at").defaultNow(),
 });
 

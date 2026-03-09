@@ -9,6 +9,7 @@ import NotFound from "@/pages/not-found";
 
 import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
+import History from "@/pages/History";
 
 function AppContent() {
   const { user, isLoading } = useAuth();
@@ -28,6 +29,7 @@ function AppContent() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/history" component={History} />
       <Route component={NotFound} />
     </Switch>
   );

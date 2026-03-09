@@ -122,6 +122,18 @@ export const api = {
         404: errorSchemas.notFound,
       }
     }
+  },
+  history: {
+    get: {
+      method: "GET" as const,
+      path: "/api/history" as const,
+      responses: {
+        200: z.array(z.object({
+          plan: mealPlanWithDetailsSchema,
+          groceryList: groceryListWithItemsSchema.nullable(),
+        })),
+      },
+    }
   }
 };
 

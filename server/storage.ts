@@ -17,12 +17,14 @@ export interface IStorage {
   
   // Meal Plans
   getCurrentMealPlan(userId: string): Promise<any | null>;
-  createMealPlan(userId: string, planMeals: { mealId: number, dayOfWeek: string }[]): Promise<any>;
+  createMealPlan(userId: string, planMeals: { mealId: number, dayOfWeek: string }[], weekOf?: string): Promise<any>;
+  getMealPlanHistory(userId: string, limit?: number): Promise<any[]>;
   
   // Grocery Lists
   getCurrentGroceryList(userId: string): Promise<any | null>;
   createGroceryList(userId: string, planId: number, items: { name: string }[]): Promise<any>;
   toggleGroceryItem(id: number, isChecked: boolean): Promise<any>;
+  getGroceryListByPlanId(planId: number): Promise<any | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -76,11 +78,28 @@ export class DatabaseStorage implements IStorage {
     return { ...plan, meals: mealsData };
   }
   
-  async createMealPlan(userId: string, planMeals: { mealId: number, dayOfWeek: string }[]) {
-    const [plan] = await db.insert(mealPlans).values({ userId }).returning();
+  async createMealPlan(userId: string, planMeals: { mealId: number, dayOfWeek: string }[], weekOf?: string) {
+    const [plan] = await db.insert(mealPlans).values({ userId, weekOf: weekOf ?? null }).returning();
     const vals = planMeals.map(pm => ({ ...pm, planId: plan.id }));
     await db.insert(mealPlanMeals).values(vals);
     return this.getCurrentMealPlan(userId);
+  }
+
+  async getMealPlanHistory(userId: string, limit = 8) {
+    const plans = await db.select().from(mealPlans)
+      .where(eq(mealPlans.userId, userId))
+      .orderBy(desc(mealPlans.createdAt))
+      .limit(limit);
+
+    return Promise.all(plans.map(async plan => {
+      const planMealsRows = await db.select().from(mealPlanMeals).where(eq(mealPlanMeals.planId, plan.id));
+      const mealsData = await Promise.all(planMealsRows.map(async pm => {
+        const [m] = await db.select().from(meals).where(eq(meals.id, pm.mealId));
+        const ingredients = await db.select().from(mealIngredients).where(eq(mealIngredients.mealId, m.id));
+        return { ...pm, meal: { ...m, ingredients } };
+      }));
+      return { ...plan, meals: mealsData };
+    }));
   }
   
   async getCurrentGroceryList(userId: string) {
@@ -103,6 +122,13 @@ export class DatabaseStorage implements IStorage {
   async toggleGroceryItem(id: number, isChecked: boolean) {
     const [item] = await db.update(groceryListItems).set({ isChecked }).where(eq(groceryListItems.id, id)).returning();
     return item;
+  }
+
+  async getGroceryListByPlanId(planId: number) {
+    const [list] = await db.select().from(groceryLists).where(eq(groceryLists.planId, planId)).orderBy(desc(groceryLists.createdAt)).limit(1);
+    if (!list) return null;
+    const items = await db.select().from(groceryListItems).where(eq(groceryListItems.listId, list.id));
+    return { ...list, items };
   }
 }
 
