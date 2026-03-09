@@ -11,7 +11,7 @@ export default function Landing() {
       <div className="absolute bottom-[-10%] right-[-5%] w-[50%] h-[50%] bg-accent/40 rounded-full blur-3xl" />
 
       <nav className="w-full px-6 py-6 flex justify-between items-center relative z-10">
-        <img src={logoSrc} alt="Preppa" className="h-9 w-auto" />
+        <img src={logoSrc} alt="Preppa" className="h-12 w-auto" />
         <button
           onClick={() => window.location.href = "/api/login"}
           data-testid="button-landing-signin"
