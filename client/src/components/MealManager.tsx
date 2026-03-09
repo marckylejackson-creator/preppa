@@ -2,11 +2,13 @@ import { useState } from "react";
 import { useMeals, useCreateMeal } from "@/hooks/use-meals";
 import { ChefHat, Plus, Clock, Loader2, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { RecipeModal } from "@/components/RecipeModal";
 
 export function MealManager() {
   const { data: meals, isLoading } = useMeals();
   const createMeal = useCreateMeal();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedMeal, setSelectedMeal] = useState<any>(null);
   
   // Form State
   const [name, setName] = useState("");
@@ -74,17 +76,22 @@ export function MealManager() {
           </div>
         ) : (
           meals?.map((meal) => (
-            <div key={meal.id} className="p-4 rounded-2xl border border-border/50 bg-background/50 hover:bg-secondary/30 transition-colors group">
+            <button
+              key={meal.id}
+              onClick={() => setSelectedMeal(meal)}
+              data-testid={`card-meal-${meal.id}`}
+              className="w-full text-left p-4 rounded-2xl border border-border/50 bg-background/50 hover:bg-secondary/30 transition-colors group cursor-pointer"
+            >
               <div className="flex justify-between items-start mb-2">
                 <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{meal.name}</h3>
-                <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground bg-secondary px-2 py-1 rounded-lg">
+                <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground bg-secondary px-2 py-1 rounded-lg shrink-0 ml-2">
                   <Clock size={12} /> {meal.prepTimeMins}m
                 </span>
               </div>
               <p className="text-xs text-muted-foreground line-clamp-1">
-                {meal.ingredients?.map(i => i.name).join(", ") || "No specific ingredients listed"}
+                {meal.ingredients?.map((i: any) => i.name).join(", ") || "No specific ingredients listed"}
               </p>
-            </div>
+            </button>
           ))
         )}
       </div>
@@ -179,6 +186,8 @@ export function MealManager() {
           </div>
         )}
       </AnimatePresence>
+
+      <RecipeModal meal={selectedMeal} onClose={() => setSelectedMeal(null)} />
     </div>
   );
 }

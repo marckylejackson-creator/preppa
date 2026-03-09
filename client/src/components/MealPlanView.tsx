@@ -6,6 +6,7 @@ import { Calendar, Wand2, Loader2, ArrowRightLeft } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { RecipeModal } from "@/components/RecipeModal";
 
 type Props = {
   isGuest?: boolean;
@@ -20,6 +21,7 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [swappingDay, setSwappingDay] = useState<string | null>(null);
+  const [selectedMeal, setSelectedMeal] = useState<any>(null);
 
   // Fetch all meals for random swap selection
   const { data: allMeals } = useQuery<any[]>({
@@ -134,12 +136,16 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
                   <div className="w-24 shrink-0 font-display font-semibold text-sm text-muted-foreground">
                     {day}
                   </div>
-                  <div className={`flex-1 bg-card px-4 py-2.5 rounded-xl border border-border/50 premium-shadow min-w-0 transition-opacity ${isSwapping ? "opacity-40" : ""}`}>
+                  <button
+                    onClick={() => setSelectedMeal(dayMeal.meal)}
+                    data-testid={`card-plan-meal-${day.toLowerCase()}`}
+                    className={`flex-1 text-left bg-card px-4 py-2.5 rounded-xl border border-border/50 premium-shadow min-w-0 transition-opacity hover:border-primary/30 hover:bg-primary/5 ${isSwapping ? "opacity-40 pointer-events-none" : ""}`}
+                  >
                     <div className="font-bold text-foreground text-sm truncate">{dayMeal.meal.name}</div>
                     <div className="text-xs font-medium text-primary mt-0.5">
                       {dayMeal.meal.prepTimeMins} mins prep
                     </div>
-                  </div>
+                  </button>
                   <button
                     onClick={() => handleSwap(day, dayMeal.mealId)}
                     disabled={isSwapping || swapMutation.isPending}
@@ -158,6 +164,8 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
           </div>
         )}
       </div>
+
+      <RecipeModal meal={selectedMeal} onClose={() => setSelectedMeal(null)} />
     </div>
   );
 }
