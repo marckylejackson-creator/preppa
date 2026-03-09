@@ -137,10 +137,11 @@ Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, a
       const plan = await storage.getCurrentMealPlan(userId);
       if (!plan) return res.status(404).json({ message: "No active plan" });
 
-      // Capture old meal before swap for grocery diffing
+      // Capture old meal before swap for grocery diffing + preference tracking
       const dayMeal = plan.meals.find((m: any) => m.dayOfWeek === input.day);
+      let swapEventId: number | null = null;
       if (dayMeal) {
-        await storage.recordSwapEvent(userId, dayMeal.mealId, input.newMealId);
+        swapEventId = await storage.recordSwapEvent(userId, dayMeal.mealId, input.newMealId);
       }
 
       await storage.swapMealInPlan(plan.id, input.day, input.newMealId);
@@ -189,10 +190,23 @@ Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, a
       }
       // ──────────────────────────────────────────────────────────────────
 
-      res.json(updatedPlan);
+      res.json({ plan: updatedPlan, swapEventId });
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "Failed to swap meal" });
+    }
+  });
+
+  // Save user-provided reason for a swap
+  app.patch("/api/swap-events/:id/reason", isAuthenticated, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { reason } = req.body;
+      if (isNaN(id) || !reason) return res.status(400).json({ message: "Invalid request" });
+      await storage.updateSwapEventReason(id, reason);
+      res.json({ ok: true });
+    } catch (err) {
+      res.status(500).json({ message: "Failed to save reason" });
     }
   });
 

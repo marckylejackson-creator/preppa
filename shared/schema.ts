@@ -64,6 +64,7 @@ export const swapEvents = pgTable("swap_events", {
   acceptedMealId: integer("accepted_meal_id").notNull(),
   rejectedCategory: text("rejected_category").$type<MealCategory>().notNull(),
   acceptedCategory: text("accepted_category").$type<MealCategory>().notNull(),
+  reason: text("reason"), // optional user-provided reason for the swap
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

@@ -25,7 +25,8 @@ export interface IStorage {
   getSwapOptions(userId: string, excludeMealIds: number[]): Promise<any[]>;
 
   // Swap event tracking
-  recordSwapEvent(userId: string, rejectedMealId: number, acceptedMealId: number): Promise<void>;
+  recordSwapEvent(userId: string, rejectedMealId: number, acceptedMealId: number): Promise<number | null>;
+  updateSwapEventReason(id: number, reason: string): Promise<void>;
   getWeeklyRejectedCategories(userId: string): Promise<{ category: MealCategory; count: number }[]>;
   
   // Grocery Lists
@@ -181,17 +182,22 @@ export class DatabaseStorage implements IStorage {
     return { ...list, items };
   }
 
-  async recordSwapEvent(userId: string, rejectedMealId: number, acceptedMealId: number) {
+  async recordSwapEvent(userId: string, rejectedMealId: number, acceptedMealId: number): Promise<number | null> {
     const [rejected] = await db.select().from(meals).where(eq(meals.id, rejectedMealId));
     const [accepted] = await db.select().from(meals).where(eq(meals.id, acceptedMealId));
-    if (!rejected || !accepted) return;
-    await db.insert(swapEvents).values({
+    if (!rejected || !accepted) return null;
+    const [event] = await db.insert(swapEvents).values({
       userId,
       rejectedMealId,
       acceptedMealId,
       rejectedCategory: (rejected.category ?? "other") as MealCategory,
       acceptedCategory: (accepted.category ?? "other") as MealCategory,
-    });
+    }).returning();
+    return event?.id ?? null;
+  }
+
+  async updateSwapEventReason(id: number, reason: string): Promise<void> {
+    await db.update(swapEvents).set({ reason }).where(eq(swapEvents.id, id));
   }
 
   async getWeeklyRejectedCategories(userId: string): Promise<{ category: MealCategory; count: number }[]> {

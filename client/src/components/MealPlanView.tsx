@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentMealPlan, useGenerateMealPlan } from "@/hooks/use-meal-plans";
 import { api } from "@shared/routes";
 import { Calendar, Wand2, Loader2, ArrowRightLeft } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { RecipeModal } from "@/components/RecipeModal";
@@ -13,7 +13,21 @@ type Props = {
   onGuestAction?: () => void;
 };
 
+type ReasonTray = {
+  day: string;
+  swapEventId: number;
+};
+
 const DAYS_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+
+const SWAP_REASONS = [
+  { label: "Too heavy", value: "too_heavy" },
+  { label: "Takes too long", value: "too_long" },
+  { label: "Had it recently", value: "had_recently" },
+  { label: "Want variety", value: "want_variety" },
+];
+
+const TRAY_TIMEOUT_MS = 5000;
 
 export function MealPlanView({ isGuest, onGuestAction }: Props) {
   const { data: plan, isLoading } = useCurrentMealPlan();
@@ -22,6 +36,7 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
   const queryClient = useQueryClient();
   const [swappingDay, setSwappingDay] = useState<string | null>(null);
   const [selectedMeal, setSelectedMeal] = useState<any>(null);
+  const [reasonTray, setReasonTray] = useState<ReasonTray | null>(null);
 
   // Fetch all meals for random swap selection
   const { data: allMeals } = useQuery<any[]>({
@@ -34,20 +49,40 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
     enabled: !isGuest,
   });
 
+  // Auto-dismiss reason tray after timeout
+  useEffect(() => {
+    if (!reasonTray) return;
+    const timer = setTimeout(() => setReasonTray(null), TRAY_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [reasonTray]);
+
   const swapMutation = useMutation({
     mutationFn: async ({ day, newMealId }: { day: string; newMealId: number }) => {
-      return apiRequest("PATCH", api.mealPlans.swap.path, { day, newMealId });
+      const res = await apiRequest("PATCH", api.mealPlans.swap.path, { day, newMealId });
+      return res.json() as Promise<{ plan: any; swapEventId: number | null }>;
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: [api.mealPlans.current.path] });
       queryClient.invalidateQueries({ queryKey: [api.groceryLists.current.path] });
       setSwappingDay(null);
+      if (data.swapEventId) {
+        setReasonTray({ day: variables.day, swapEventId: data.swapEventId });
+      }
     },
     onError: () => {
       toast({ title: "Swap failed", description: "Couldn't swap meal. Try again.", variant: "destructive" });
       setSwappingDay(null);
     },
   });
+
+  const handleReason = async (swapEventId: number, reason: string) => {
+    setReasonTray(null);
+    try {
+      await apiRequest("PATCH", `/api/swap-events/${swapEventId}/reason`, { reason });
+    } catch {
+      // non-critical — silently ignore
+    }
+  };
 
   const handleGenerate = () => {
     if (isGuest && onGuestAction) { onGuestAction(); return; }
@@ -66,6 +101,7 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
     }
 
     const pick = options[Math.floor(Math.random() * options.length)];
+    setReasonTray(null);
     setSwappingDay(day);
     swapMutation.mutate({ day, newMealId: pick.id });
   };
@@ -120,46 +156,75 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {DAYS_ORDER.map((day, idx) => {
               const dayMeal = plan.meals.find((m: any) => m.dayOfWeek === day);
               if (!dayMeal) return null;
               const isSwapping = swappingDay === day;
+              const showTray = reasonTray?.day === day;
 
               return (
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: idx * 0.07 }}
-                  key={day}
-                  className="flex items-center gap-3 p-3 rounded-2xl bg-secondary/30 border border-border/50 hover-elevate"
-                >
-                  <div className="w-24 shrink-0 font-display font-semibold text-sm text-muted-foreground">
-                    {day}
-                  </div>
-                  <button
-                    onClick={() => setSelectedMeal(dayMeal.meal)}
-                    data-testid={`card-plan-meal-${day.toLowerCase()}`}
-                    className={`flex-1 text-left bg-card px-4 py-2.5 rounded-xl border border-border/50 premium-shadow min-w-0 transition-opacity hover:border-primary/30 hover:bg-primary/5 ${isSwapping ? "opacity-40 pointer-events-none" : ""}`}
+                <div key={day}>
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: idx * 0.07 }}
+                    className="flex items-center gap-3 p-3 rounded-2xl bg-secondary/30 border border-border/50 hover-elevate"
                   >
-                    <div className="font-bold text-foreground text-sm truncate">{dayMeal.meal.name}</div>
-                    <div className="text-xs font-medium text-primary mt-0.5">
-                      {dayMeal.meal.prepTimeMins} mins prep
+                    <div className="w-24 shrink-0 font-display font-semibold text-sm text-muted-foreground">
+                      {day}
                     </div>
-                  </button>
-                  <button
-                    onClick={() => handleSwap(day, dayMeal.mealId)}
-                    disabled={isSwapping || swapMutation.isPending}
-                    data-testid={`button-swap-${day.toLowerCase()}`}
-                    title={`Swap ${day}'s meal`}
-                    className="shrink-0 p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {isSwapping
-                      ? <Loader2 size={16} className="animate-spin" />
-                      : <ArrowRightLeft size={16} />
-                    }
-                  </button>
-                </motion.div>
+                    <button
+                      onClick={() => setSelectedMeal(dayMeal.meal)}
+                      data-testid={`card-plan-meal-${day.toLowerCase()}`}
+                      className={`flex-1 text-left bg-card px-4 py-2.5 rounded-xl border border-border/50 premium-shadow min-w-0 transition-opacity hover:border-primary/30 hover:bg-primary/5 ${isSwapping ? "opacity-40 pointer-events-none" : ""}`}
+                    >
+                      <div className="font-bold text-foreground text-sm truncate">{dayMeal.meal.name}</div>
+                      <div className="text-xs font-medium text-primary mt-0.5">
+                        {dayMeal.meal.prepTimeMins} mins prep
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => handleSwap(day, dayMeal.mealId)}
+                      disabled={isSwapping || swapMutation.isPending}
+                      data-testid={`button-swap-${day.toLowerCase()}`}
+                      title={`Swap ${day}'s meal`}
+                      className="shrink-0 p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {isSwapping
+                        ? <Loader2 size={16} className="animate-spin" />
+                        : <ArrowRightLeft size={16} />
+                      }
+                    </button>
+                  </motion.div>
+
+                  {/* Reason tray — slides in below the row after a swap */}
+                  <AnimatePresence>
+                    {showTray && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0, y: -4 }}
+                        animate={{ opacity: 1, height: "auto", y: 0 }}
+                        exit={{ opacity: 0, height: 0, y: -4 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="flex items-center gap-2 px-3 pt-1.5 pb-0.5 flex-wrap">
+                          <span className="text-xs text-muted-foreground font-medium shrink-0">Why the swap?</span>
+                          {SWAP_REASONS.map(r => (
+                            <button
+                              key={r.value}
+                              onClick={() => handleReason(reasonTray!.swapEventId, r.value)}
+                              data-testid={`reason-${r.value}`}
+                              className="text-xs px-2.5 py-1 rounded-lg bg-secondary hover:bg-primary/10 hover:text-primary border border-border/50 hover:border-primary/30 transition-all font-medium"
+                            >
+                              {r.label}
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               );
             })}
           </div>
