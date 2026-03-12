@@ -21,7 +21,7 @@ type ReasonTray = {
 const DAYS_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
 const SWAP_REASONS = [
-  { label: "Too heavy", value: "too_heavy" },
+  { label: "Just not in the mood", value: "not_in_mood" },
   { label: "Takes too long", value: "too_long" },
   { label: "Had it recently", value: "had_recently" },
   { label: "Kids won't eat it", value: "kids_wont_eat" },
