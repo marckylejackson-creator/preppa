@@ -179,7 +179,7 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
                       data-testid={`card-plan-meal-${day.toLowerCase()}`}
                       className={`flex-1 text-left bg-card px-4 py-2.5 rounded-xl border border-border/50 premium-shadow min-w-0 transition-opacity hover:border-primary/30 hover:bg-primary/5 ${isSwapping ? "opacity-40 pointer-events-none" : ""}`}
                     >
-                      <div className="font-bold text-foreground text-sm truncate">{dayMeal.meal.name}</div>
+                      <div className="font-bold text-foreground text-sm leading-snug">{dayMeal.meal.name}</div>
                       <div className="text-xs font-medium text-primary mt-0.5">
                         {dayMeal.meal.prepTimeMins} mins prep
                       </div>
