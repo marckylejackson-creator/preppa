@@ -119,7 +119,7 @@ export function GroceryListView() {
                   opacity: item.isChecked ? 0.45 : 1,
                   x: item.isChecked ? 6 : 0,
                 }}
-                transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
                 className={clsx(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left",
                   item.isChecked
@@ -130,7 +130,7 @@ export function GroceryListView() {
                 <motion.div
                   className={clsx("shrink-0", item.isChecked ? "text-primary" : "text-muted-foreground")}
                   animate={{ scale: item.isChecked ? 1.15 : 1 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                  transition={{ type: "spring", stiffness: 220, damping: 18 }}
                 >
                   {item.isChecked ? <CheckCircle2 size={18} /> : <Circle size={18} />}
                 </motion.div>
