@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentMealPlan, useGenerateMealPlan } from "@/hooks/use-meal-plans";
 import { api } from "@shared/routes";
@@ -37,6 +37,7 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
   const [swappingDay, setSwappingDay] = useState<string | null>(null);
   const [selectedMeal, setSelectedMeal] = useState<any>(null);
   const [reasonTray, setReasonTray] = useState<ReasonTray | null>(null);
+  const swapStartRef = useRef<number>(0);
 
   // Fetch all meals for random swap selection
   const { data: allMeals } = useQuery<any[]>({
@@ -64,10 +65,14 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: [api.mealPlans.current.path] });
       queryClient.invalidateQueries({ queryKey: [api.groceryLists.current.path] });
-      setSwappingDay(null);
-      if (data.swapEventId) {
-        setReasonTray({ day: variables.day, swapEventId: data.swapEventId });
-      }
+      const elapsed = Date.now() - swapStartRef.current;
+      const remaining = Math.max(0, 1000 - elapsed);
+      setTimeout(() => {
+        setSwappingDay(null);
+        if (data.swapEventId) {
+          setReasonTray({ day: variables.day, swapEventId: data.swapEventId });
+        }
+      }, remaining);
     },
     onError: () => {
       toast({ title: "Swap failed", description: "Couldn't swap meal. Try again.", variant: "destructive" });
@@ -102,6 +107,7 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
 
     const pick = options[Math.floor(Math.random() * options.length)];
     setReasonTray(null);
+    swapStartRef.current = Date.now();
     setSwappingDay(day);
     swapMutation.mutate({ day, newMealId: pick.id });
   };
@@ -171,17 +177,24 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
                     transition={{ delay: idx * 0.07 }}
                     className="flex items-center gap-3 p-3 rounded-2xl bg-secondary/30 border border-border/50 hover-elevate"
                   >
-                    <button
-                      onClick={() => setSelectedMeal(dayMeal.meal)}
-                      data-testid={`card-plan-meal-${day.toLowerCase()}`}
-                      className={`flex-1 text-left bg-card px-4 py-2.5 rounded-xl border border-border/50 premium-shadow min-w-0 transition-opacity hover:border-primary/30 hover:bg-primary/5 ${isSwapping ? "opacity-40 pointer-events-none" : ""}`}
-                    >
-                      <div className="font-bold text-primary text-sm leading-snug">{dayMeal.meal.name}</div>
-                      <div className="flex items-center gap-1 mt-0.5 text-muted-foreground">
-                        <Clock size={11} />
-                        <span className="text-xs font-medium">{dayMeal.meal.prepTimeMins} min</span>
+                    {isSwapping ? (
+                      <div className="flex-1 bg-card px-4 py-2.5 rounded-xl border border-border/50 min-w-0 animate-pulse">
+                        <div className="h-3.5 bg-muted-foreground/20 rounded w-3/4 mb-2" />
+                        <div className="h-2.5 bg-muted-foreground/15 rounded w-1/4" />
                       </div>
-                    </button>
+                    ) : (
+                      <button
+                        onClick={() => setSelectedMeal(dayMeal.meal)}
+                        data-testid={`card-plan-meal-${day.toLowerCase()}`}
+                        className="flex-1 text-left bg-card px-4 py-2.5 rounded-xl border border-border/50 premium-shadow min-w-0 transition-colors hover:border-primary/30 hover:bg-primary/5"
+                      >
+                        <div className="font-bold text-primary text-sm leading-snug">{dayMeal.meal.name}</div>
+                        <div className="flex items-center gap-1 mt-0.5 text-muted-foreground">
+                          <Clock size={11} />
+                          <span className="text-xs font-medium">{dayMeal.meal.prepTimeMins} min</span>
+                        </div>
+                      </button>
+                    )}
                     <button
                       onClick={() => handleSwap(day, dayMeal.mealId)}
                       disabled={isSwapping || swapMutation.isPending}
