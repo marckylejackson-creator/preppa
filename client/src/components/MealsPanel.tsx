@@ -1,14 +1,12 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, Search, CalendarPlus, Trash2, X, Check, Loader2 } from "lucide-react";
+import { Heart, Search, CalendarPlus, Trash2, X, Loader2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday"] as const;
-const DAY_LABELS: Record<string, string> = {
-  monday: "Mon", tuesday: "Tue", wednesday: "Wed", thursday: "Thu", friday: "Fri",
-};
+const DAYS_ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday"] as const;
+
 const DELETE_REASONS = [
   "Already in our rotation",
   "Too time-consuming",
@@ -22,7 +20,6 @@ export function MealsPanel() {
   const [deletingMeal, setDeletingMeal] = useState<string | null>(null);
   const [deleteReason, setDeleteReason] = useState<string | null>(null);
   const [addingMeal, setAddingMeal] = useState<string | null>(null);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const { data: profile, isLoading } = useQuery<any>({ queryKey: ["/api/profile"] });
   const { data: plan } = useQuery<any>({ queryKey: ["/api/meal-plans/current"] });
@@ -33,11 +30,16 @@ export function MealsPanel() {
     [favorites, search]
   );
 
-  const dayMealMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const entry of plan?.meals ?? []) map[entry.dayOfWeek] = entry.meal?.name ?? "Meal";
-    return map;
+  const takenDays = useMemo(() => {
+    const days = new Set<string>();
+    for (const entry of plan?.meals ?? []) days.add(entry.dayOfWeek?.toLowerCase());
+    return days;
   }, [plan]);
+
+  const pickDay = () => {
+    const open = DAYS_ORDER.find(d => !takenDays.has(d));
+    return open ?? "monday";
+  };
 
   const removeFav = useMutation({
     mutationFn: (updated: string[]) =>
@@ -58,21 +60,26 @@ export function MealsPanel() {
       queryClient.invalidateQueries({ queryKey: ["/api/meal-plans/current"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grocery-lists/current"] });
       setAddingMeal(null);
-      setSelectedDay(null);
-      toast({ description: `${vars.mealName} added to ${DAY_LABELS[vars.day]}!` });
+      toast({ description: `${vars.mealName} added to this week's menu!` });
     },
-    onError: () => toast({ description: "Couldn't add to plan — try again.", variant: "destructive" }),
+    onError: () => {
+      setAddingMeal(null);
+      toast({ description: "Couldn't add to plan — try again.", variant: "destructive" });
+    },
   });
 
+  const handleAddToMenu = (meal: string) => {
+    if (addToPlan.isPending) return;
+    setDeletingMeal(null);
+    setDeleteReason(null);
+    setAddingMeal(meal);
+    addToPlan.mutate({ mealName: meal, day: pickDay() });
+  };
+
   const openDelete = (meal: string) => {
-    setAddingMeal(null); setSelectedDay(null);
+    setAddingMeal(null);
     setDeletingMeal(prev => prev === meal ? null : meal);
     setDeleteReason(null);
-  };
-  const openAdd = (meal: string) => {
-    setDeletingMeal(null); setDeleteReason(null);
-    setAddingMeal(prev => prev === meal ? null : meal);
-    setSelectedDay(null);
   };
 
   return (
@@ -138,11 +145,14 @@ export function MealsPanel() {
                     <p className="flex-1 font-semibold text-sm text-foreground">{meal}</p>
                     <button
                       data-testid={`button-add-to-menu-${meal}`}
-                      onClick={() => openAdd(meal)}
+                      onClick={() => handleAddToMenu(meal)}
+                      disabled={addToPlan.isPending}
                       title="Add to this week's menu"
-                      className={`p-2 rounded-xl transition-colors ${addingMeal === meal ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-primary hover:bg-primary/10"}`}
+                      className="p-2 rounded-xl transition-colors text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-40"
                     >
-                      <CalendarPlus size={16} />
+                      {addingMeal === meal && addToPlan.isPending
+                        ? <Loader2 size={16} className="animate-spin" />
+                        : <CalendarPlus size={16} />}
                     </button>
                     <button
                       data-testid={`button-delete-favorite-${meal}`}
@@ -153,56 +163,6 @@ export function MealsPanel() {
                       <Trash2 size={16} />
                     </button>
                   </div>
-
-                  {/* Add to menu tray */}
-                  <AnimatePresence>
-                    {addingMeal === meal && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="overflow-hidden"
-                      >
-                        <div className="px-4 pb-4 pt-1 border-t border-border/40 bg-secondary/20">
-                          <p className="text-xs font-semibold text-foreground mb-2.5">Which day should we add it to?</p>
-                          <div className="flex gap-1.5 flex-wrap mb-3">
-                            {DAYS.map(day => {
-                              const current = dayMealMap[day];
-                              const isSelected = selectedDay === day;
-                              return (
-                                <button key={day} data-testid={`button-day-${day}`}
-                                  onClick={() => setSelectedDay(day)}
-                                  className={`flex flex-col items-center px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                                    isSelected
-                                      ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20"
-                                      : "bg-background border-border/60 text-foreground hover:border-primary/40 hover:bg-primary/5"
-                                  }`}
-                                >
-                                  <span>{DAY_LABELS[day]}</span>
-                                  {current && (
-                                    <span className={`mt-0.5 font-normal truncate max-w-[52px] ${isSelected ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                                      {current.split(" ")[0]}
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => { setAddingMeal(null); setSelectedDay(null); }}
-                              className="flex-1 py-2 text-xs font-semibold text-muted-foreground bg-secondary rounded-xl hover:bg-secondary/80 transition-colors">
-                              Cancel
-                            </button>
-                            <button data-testid="button-confirm-add-to-plan"
-                              disabled={!selectedDay || addToPlan.isPending}
-                              onClick={() => addingMeal && selectedDay && addToPlan.mutate({ mealName: addingMeal, day: selectedDay })}
-                              className="flex-1 py-2 text-xs font-bold bg-primary text-primary-foreground rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-40 flex items-center justify-center gap-1.5">
-                              {addToPlan.isPending ? <Loader2 size={13} className="animate-spin" /> : <><Check size={13} />Add to menu</>}
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
 
                   {/* Delete tray */}
                   <AnimatePresence>
