@@ -48,6 +48,7 @@ function AppContent() {
   return (
     <Switch>
       <Route path="/onboarding" component={Onboarding} />
+      <Route path="/preferences" component={Onboarding} />
       <Route path="/" component={Dashboard} />
       <Route path="/meals" component={Meals} />
       <Route path="/history" component={History} />

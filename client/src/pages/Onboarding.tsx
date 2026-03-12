@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight, ChevronLeft, Check, Loader2, UtensilsCrossed } from "lucide-react";
-import { useMutation } from "@tanstack/react-query";
+import { ChevronRight, ChevronLeft, Check, Loader2, UtensilsCrossed, ArrowLeft } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import logoPath from "@assets/preppa_logo_orange_1_1773037358063.png";
@@ -175,12 +175,60 @@ function CelebrationScreen() {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Onboarding() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
+  const isEditing = location === "/preferences";
   const { toast } = useToast();
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
   const [answers, setAnswers] = useState<Answers>(DEFAULT);
   const [showCelebration, setShowCelebration] = useState(false);
+
+  // Pre-fill existing profile data when in edit mode
+  const { data: existingProfile } = useQuery<any>({
+    queryKey: ["/api/profile"],
+    enabled: isEditing,
+  });
+
+  useEffect(() => {
+    if (!existingProfile) return;
+    const p = existingProfile;
+    // Rehydrate stores: stored as "Walmart, Trader Joe's" CSV
+    const storeArr = p.groceryStore ? p.groceryStore.split(",").map((s: string) => s.trim()) : [];
+    const knownStores = STORE_OPTIONS.filter(o => o !== "Other");
+    const otherStores = storeArr.filter((s: string) => !knownStores.includes(s));
+    const groceryStores = storeArr.filter((s: string) => knownStores.includes(s));
+    if (otherStores.length > 0) groceryStores.push("Other");
+
+    // Rehydrate dislikes
+    const dislikeArr = p.dislikes ? p.dislikes.split(",").map((s: string) => s.trim()) : [];
+    const knownDislikes = DISLIKE_OPTIONS;
+    const otherDislikes = dislikeArr.filter((s: string) => !knownDislikes.includes(s));
+    const dislikes = dislikeArr.filter((s: string) => knownDislikes.includes(s));
+
+    // Rehydrate allergies
+    const knownAllergies = ALLERGY_OPTIONS.filter(o => o !== "Other");
+    const allergyArr: string[] = p.allergies ?? [];
+    const otherAllergies = allergyArr.filter((s: string) => !knownAllergies.includes(s));
+    const allergies = allergyArr.filter((s: string) => knownAllergies.includes(s));
+    if (otherAllergies.length > 0) allergies.push("Other");
+
+    setAnswers({
+      diets: p.diets ?? [],
+      allergies,
+      allergyOther: otherAllergies.join(", "),
+      adultCount: p.adultCount ?? 2,
+      kidCount: p.kidCount ?? 0,
+      groceryDay: p.groceryDay ?? "",
+      cookingNights: p.cookingNights ?? 5,
+      dislikes,
+      dislikesOther: otherDislikes.join(", "),
+      groceryStores,
+      groceryStoreOther: otherStores.join(", "),
+      favoriteMeals: p.favoriteMeals ?? [],
+      pantryStaples: [],
+      freezerItems: p.freezerItems ?? [],
+    });
+  }, [existingProfile]);
 
   const total = STEPS.length;
   const progress = ((step + 1) / total) * 100;
@@ -230,11 +278,14 @@ export default function Onboarding() {
       if (answers.pantryStaples.length > 0) {
         localStorage.setItem("preppa_pantry_setup_done", "true");
       }
-      setShowCelebration(true);
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+      if (isEditing) {
+        toast({ title: "Preferences saved!", description: "Your meal plans will reflect your updates going forward." });
         navigate("/");
-      }, 3000);
+      } else {
+        setShowCelebration(true);
+        setTimeout(() => navigate("/"), 3000);
+      }
     },
     onError: () => {
       toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
@@ -266,9 +317,24 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-lg">
-        <div className="flex justify-center mb-8">
-          <img src={logoPath} alt="Preppa" className="h-9" />
-        </div>
+        {isEditing ? (
+          <div className="flex items-center gap-3 mb-8">
+            <button
+              onClick={() => navigate("/")}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              data-testid="button-back-to-dashboard"
+            >
+              <ArrowLeft size={15} />
+              Back to dashboard
+            </button>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="text-sm font-semibold text-foreground">Edit Preferences</span>
+          </div>
+        ) : (
+          <div className="flex justify-center mb-8">
+            <img src={logoPath} alt="Preppa" className="h-9" />
+          </div>
+        )}
 
         <div className="bg-card rounded-3xl border border-border/40 shadow-xl overflow-hidden">
           {/* Progress bar */}
@@ -522,7 +588,7 @@ export default function Onboarding() {
               className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-foreground text-background rounded-xl font-semibold text-sm hover:bg-foreground/90 transition-all disabled:opacity-40">
               {saveMutation.isPending
                 ? <Loader2 size={16} className="animate-spin" />
-                : <>{step === total - 1 ? "Let's go!" : "Continue"}{step < total - 1 && <ChevronRight size={16} />}</>
+                : <>{step === total - 1 ? (isEditing ? "Save changes" : "Let's go!") : "Continue"}{step < total - 1 && <ChevronRight size={16} />}</>
               }
             </motion.button>
           </div>
