@@ -114,7 +114,7 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
 
   return (
     <div className="bg-card rounded-3xl p-6 sm:p-8 premium-shadow border border-border/40 h-full flex flex-col">
-      <div className="flex sm:items-center justify-between mb-8 flex-col sm:flex-row gap-4">
+      <div className="flex sm:items-center justify-between mb-5 flex-col sm:flex-row gap-3">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-accent text-accent-foreground rounded-2xl">
             <Calendar size={24} />
@@ -162,7 +162,7 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {DAYS_ORDER.map((day, idx) => {
               const dayMeal = plan.meals.find((m: any) => m.dayOfWeek === day);
               if (!dayMeal) return null;
@@ -175,38 +175,39 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: idx * 0.07 }}
-                    className="flex items-center gap-3 p-3 rounded-2xl bg-secondary/30 border border-border/50 hover-elevate"
                   >
                     {isSwapping ? (
-                      <div className="flex-1 bg-card px-4 py-2.5 rounded-xl border border-border/50 min-w-0 animate-pulse">
-                        <div className="h-3.5 bg-muted-foreground/20 rounded w-3/4 mb-2" />
-                        <div className="h-2.5 bg-muted-foreground/15 rounded w-1/4" />
+                      <div className="bg-card px-4 py-2.5 rounded-xl border border-border/50 flex items-center gap-3 min-w-0 animate-pulse">
+                        <div className="flex-1">
+                          <div className="h-3.5 bg-muted-foreground/20 rounded w-3/4 mb-1.5" />
+                          <div className="h-2.5 bg-muted-foreground/15 rounded w-1/4" />
+                        </div>
+                        <Loader2 size={15} className="animate-spin text-muted-foreground shrink-0" />
                       </div>
                     ) : (
-                      <button
-                        onClick={() => setSelectedMeal(dayMeal.meal)}
-                        data-testid={`card-plan-meal-${day.toLowerCase()}`}
-                        className="flex-1 text-left bg-card px-4 py-2.5 rounded-xl border border-border/50 premium-shadow min-w-0 transition-colors hover:border-primary/30 hover:bg-primary/5"
-                      >
-                        <div className="font-bold text-primary text-base leading-snug">{dayMeal.meal.name}</div>
-                        <div className="flex items-center gap-1 mt-0.5 text-muted-foreground">
-                          <Clock size={11} />
-                          <span className="text-xs font-medium">{dayMeal.meal.prepTimeMins} min</span>
-                        </div>
-                      </button>
+                      <div className="bg-card px-4 py-2.5 rounded-xl border border-border/50 premium-shadow flex items-center gap-2 hover:border-primary/30 transition-colors">
+                        <button
+                          onClick={() => setSelectedMeal(dayMeal.meal)}
+                          data-testid={`card-plan-meal-${day.toLowerCase()}`}
+                          className="flex-1 text-left min-w-0"
+                        >
+                          <div className="font-bold text-primary text-base leading-snug">{dayMeal.meal.name}</div>
+                          <div className="flex items-center gap-1 mt-0.5 text-muted-foreground">
+                            <Clock size={11} />
+                            <span className="text-xs font-medium">{dayMeal.meal.prepTimeMins} min</span>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => handleSwap(day, dayMeal.mealId)}
+                          disabled={swapMutation.isPending}
+                          data-testid={`button-swap-${day.toLowerCase()}`}
+                          title="Swap meal"
+                          className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <ArrowRightLeft size={15} />
+                        </button>
+                      </div>
                     )}
-                    <button
-                      onClick={() => handleSwap(day, dayMeal.mealId)}
-                      disabled={isSwapping || swapMutation.isPending}
-                      data-testid={`button-swap-${day.toLowerCase()}`}
-                      title={`Swap ${day}'s meal`}
-                      className="shrink-0 p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-card border border-transparent hover:border-border/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {isSwapping
-                        ? <Loader2 size={16} className="animate-spin" />
-                        : <ArrowRightLeft size={16} />
-                      }
-                    </button>
                   </motion.div>
 
                   {/* Reason tray — slides in below the row after a swap */}
