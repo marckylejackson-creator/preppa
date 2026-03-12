@@ -29,8 +29,8 @@ function WeekCard({ entry, index, favorites, currentDayMap }: {
   const { plan, groceryList } = entry;
   const { toast } = useToast();
   const [groceryOpen, setGroceryOpen] = useState(false);
+  // activeMeal tracks which meal's day-picker tray is open
   const [activeMeal, setActiveMeal] = useState<string | null>(null);
-  const [addMode, setAddMode] = useState<"none" | "plan">("none");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const weekLabel = index === 0 ? "Current / Most Recent Plan" : `Plan #${index + 1}`;
@@ -46,8 +46,8 @@ function WeekCard({ entry, index, favorites, currentDayMap }: {
       apiRequest("PATCH", "/api/profile/favorites", { favorites: updated }).then(r => r.json()),
     onSuccess: (_, updated) => {
       queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
-      const added = updated.length > (favorites.length);
-      toast({ description: added ? `Added to favorites!` : `Removed from favorites.` });
+      const added = updated.length > favorites.length;
+      toast({ description: added ? "Added to favorites!" : "Removed from favorites." });
     },
     onError: () => toast({ description: "Couldn't update favorites.", variant: "destructive" }),
   });
@@ -59,30 +59,29 @@ function WeekCard({ entry, index, favorites, currentDayMap }: {
       queryClient.invalidateQueries({ queryKey: ["/api/meal-plans/current"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grocery-lists/current"] });
       setActiveMeal(null);
-      setAddMode("none");
       setSelectedDay(null);
       toast({ description: `${vars.mealName} added to ${DAYS_SHORT[vars.day] ?? vars.day}!` });
     },
     onError: () => toast({ description: "Couldn't add to plan — try again.", variant: "destructive" }),
   });
 
-  const handleTileClick = (mealName: string) => {
-    if (activeMeal === mealName) {
-      setActiveMeal(null);
-      setAddMode("none");
-      setSelectedDay(null);
-    } else {
-      setActiveMeal(mealName);
-      setAddMode("none");
-      setSelectedDay(null);
-    }
-  };
-
-  const handleToggleFav = (mealName: string) => {
+  const handleToggleFav = (e: React.MouseEvent, mealName: string) => {
+    e.stopPropagation();
     if (isFav(mealName)) {
       addFavMutation.mutate(favorites.filter(f => f.toLowerCase() !== mealName.toLowerCase()));
     } else {
       addFavMutation.mutate([...favorites, mealName]);
+    }
+  };
+
+  const handleOpenDayPicker = (e: React.MouseEvent, mealName: string) => {
+    e.stopPropagation();
+    if (activeMeal === mealName) {
+      setActiveMeal(null);
+      setSelectedDay(null);
+    } else {
+      setActiveMeal(mealName);
+      setSelectedDay(null);
     }
   };
 
@@ -115,27 +114,60 @@ function WeekCard({ entry, index, favorites, currentDayMap }: {
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
           {DAYS_ORDER.map(day => {
             const dayMeal = plan.meals.find(m => m.dayOfWeek === day);
-            const isActive = !!dayMeal && activeMeal === dayMeal.meal.name;
+            const isPickerOpen = !!dayMeal && activeMeal === dayMeal.meal.name;
+            const favd = !!dayMeal && isFav(dayMeal.meal.name);
             return (
-              <button
+              <div
                 key={day}
-                onClick={() => dayMeal && handleTileClick(dayMeal.meal.name)}
-                disabled={!dayMeal}
-                data-testid={`history-day-${plan.id}-${day}`}
                 className={clsx(
-                  "rounded-2xl border p-3 flex flex-col gap-1 text-left transition-all",
-                  dayMeal ? "cursor-pointer hover:border-primary/40" : "cursor-default",
-                  isActive
-                    ? "bg-primary/8 border-primary/40 ring-1 ring-primary/20"
-                    : "bg-secondary/40 border-border/30"
+                  "group/tile relative rounded-2xl border p-3 flex flex-col gap-1 transition-colors",
+                  isPickerOpen
+                    ? "bg-secondary/60 border-primary/30"
+                    : "bg-secondary/40 border-border/30 hover:border-border/60"
                 )}
+                data-testid={`history-day-${plan.id}-${day}`}
               >
-                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{day.slice(0, 3)}</span>
+                {/* Day label + action icons row */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{day.slice(0, 3)}</span>
+                  {dayMeal && (
+                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover/tile:opacity-100 transition-opacity">
+                      {/* Favorite toggle */}
+                      <button
+                        onClick={e => handleToggleFav(e, dayMeal.meal.name)}
+                        disabled={addFavMutation.isPending}
+                        data-testid={`button-fav-${plan.id}-${day}`}
+                        title={favd ? "Remove from favorites" : "Add to favorites"}
+                        className={clsx(
+                          "w-6 h-6 flex items-center justify-center rounded-lg transition-colors",
+                          favd
+                            ? "text-primary hover:text-primary/70"
+                            : "text-muted-foreground hover:text-primary"
+                        )}
+                      >
+                        <Heart size={13} className={favd ? "fill-primary" : ""} />
+                      </button>
+                      {/* Day picker trigger */}
+                      <button
+                        onClick={e => handleOpenDayPicker(e, dayMeal.meal.name)}
+                        data-testid={`button-add-plan-${plan.id}-${day}`}
+                        title="Add to this week's menu"
+                        className={clsx(
+                          "w-6 h-6 flex items-center justify-center rounded-lg transition-colors",
+                          isPickerOpen
+                            ? "text-primary"
+                            : "text-muted-foreground hover:text-primary"
+                        )}
+                      >
+                        <CalendarPlus size={13} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {dayMeal ? (
                   <>
-                    <span className={clsx("text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground")}>
-                      {dayMeal.meal.name}
-                    </span>
+                    <span className="text-sm font-semibold text-foreground leading-tight">{dayMeal.meal.name}</span>
                     <span className="text-xs text-muted-foreground flex items-center gap-1 mt-auto">
                       <Clock size={11} /> {dayMeal.meal.prepTimeMins}m
                     </span>
@@ -143,12 +175,12 @@ function WeekCard({ entry, index, favorites, currentDayMap }: {
                 ) : (
                   <span className="text-xs text-muted-foreground italic">—</span>
                 )}
-              </button>
+              </div>
             );
           })}
         </div>
 
-        {/* Action tray */}
+        {/* Day picker tray */}
         <AnimatePresence>
           {activeMeal && (
             <motion.div
@@ -156,98 +188,65 @@ function WeekCard({ entry, index, favorites, currentDayMap }: {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: 0.18 }}
               className="overflow-hidden"
             >
               <div className="mt-3 bg-secondary/30 border border-border/30 rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-semibold text-foreground truncate pr-2">{activeMeal}</span>
-                  <button onClick={() => { setActiveMeal(null); setAddMode("none"); setSelectedDay(null); }}
-                    className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+                  <p className="text-sm font-semibold text-foreground">
+                    Add <span className="text-primary">{activeMeal}</span> to this week's menu
+                  </p>
+                  <button
+                    onClick={() => { setActiveMeal(null); setSelectedDay(null); }}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
                     <X size={15} />
                   </button>
                 </div>
-
-                {addMode === "none" && (
-                  <div className="flex flex-wrap gap-2">
-                    {/* Add to Favorites */}
-                    <button
-                      onClick={() => handleToggleFav(activeMeal)}
-                      disabled={addFavMutation.isPending}
-                      data-testid={`button-history-fav-${plan.id}`}
-                      className={clsx(
-                        "flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-all",
-                        isFav(activeMeal)
-                          ? "bg-primary/10 border-primary/30 text-primary"
-                          : "bg-background border-border text-foreground hover:border-primary/40"
-                      )}
-                    >
-                      {addFavMutation.isPending
-                        ? <Loader2 size={13} className="animate-spin" />
-                        : <Heart size={13} className={isFav(activeMeal) ? "fill-primary" : ""} />}
-                      {isFav(activeMeal) ? "Saved to favorites" : "Add to favorites"}
-                    </button>
-
-                    {/* Add to this week's menu */}
-                    <button
-                      onClick={() => setAddMode("plan")}
-                      data-testid={`button-history-add-plan-${plan.id}`}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-background text-foreground hover:border-primary/40 text-sm font-medium transition-all"
-                    >
-                      <CalendarPlus size={13} />
-                      Add to this week's menu
-                    </button>
-                  </div>
-                )}
-
-                {addMode === "plan" && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-2">Pick a day — we'll swap whatever's there:</p>
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      {DAYS_ORDER.map(day => {
-                        const current = currentDayMap[day];
-                        const isSelected = selectedDay === day;
-                        return (
-                          <button
-                            key={day}
-                            onClick={() => setSelectedDay(isSelected ? null : day)}
-                            className={clsx(
-                              "flex flex-col items-start px-3 py-2 rounded-xl border text-sm transition-all",
-                              isSelected
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "bg-background border-border text-foreground hover:border-primary/40"
-                            )}
-                          >
-                            <span className="font-semibold">{DAYS_SHORT[day]}</span>
-                            {current && (
-                              <span className={clsx("text-xs mt-0.5 truncate max-w-[80px]", isSelected ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                                {current}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="flex gap-2">
+                <p className="text-xs text-muted-foreground mb-3">Pick a day — we'll swap whatever's there:</p>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {DAYS_ORDER.map(day => {
+                    const current = currentDayMap[day];
+                    const isSelected = selectedDay === day;
+                    return (
                       <button
-                        onClick={() => { setAddMode("none"); setSelectedDay(null); }}
-                        className="px-3 py-1.5 rounded-xl border border-border bg-background text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        key={day}
+                        onClick={() => setSelectedDay(isSelected ? null : day)}
+                        className={clsx(
+                          "flex flex-col items-start px-3 py-2 rounded-xl border text-sm transition-all",
+                          isSelected
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background border-border text-foreground hover:border-primary/40"
+                        )}
                       >
-                        Back
+                        <span className="font-semibold">{DAYS_SHORT[day]}</span>
+                        {current && (
+                          <span className={clsx("text-xs mt-0.5 truncate max-w-[80px]", isSelected ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                            {current}
+                          </span>
+                        )}
                       </button>
-                      <button
-                        disabled={!selectedDay || addToPlanMutation.isPending}
-                        onClick={() => activeMeal && selectedDay && addToPlanMutation.mutate({ mealName: activeMeal, day: selectedDay.toLowerCase() })}
-                        data-testid={`button-history-confirm-plan-${plan.id}`}
-                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 transition-opacity"
-                      >
-                        {addToPlanMutation.isPending
-                          ? <Loader2 size={13} className="animate-spin" />
-                          : <><Check size={13} />Add to menu</>}
-                      </button>
-                    </div>
-                  </div>
-                )}
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setActiveMeal(null); setSelectedDay(null); }}
+                    className="px-3 py-1.5 rounded-xl border border-border bg-background text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    disabled={!selectedDay || addToPlanMutation.isPending}
+                    onClick={() => activeMeal && selectedDay && addToPlanMutation.mutate({ mealName: activeMeal, day: selectedDay.toLowerCase() })}
+                    data-testid={`button-confirm-plan-${plan.id}`}
+                    className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 transition-opacity"
+                  >
+                    {addToPlanMutation.isPending
+                      ? <Loader2 size={13} className="animate-spin" />
+                      : <><Check size={13} />Add to menu</>}
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}
@@ -325,7 +324,7 @@ export default function History() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="mb-8">
           <h1 className="text-3xl font-display font-bold text-foreground">Meal History</h1>
-          <p className="text-muted-foreground mt-1">See what your family ate — tap any meal to add it to favorites or this week's menu.</p>
+          <p className="text-muted-foreground mt-1">Hover any meal tile to save it to favorites or add it to this week's menu.</p>
         </div>
 
         {isLoading ? (
