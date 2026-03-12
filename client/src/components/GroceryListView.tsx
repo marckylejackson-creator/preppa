@@ -25,9 +25,12 @@ export function GroceryListView() {
   };
 
   // Items the user needs to buy: non-staples + staples they don't have confirmed
-  const mainItems = (list?.items ?? []).filter(i =>
-    !i.isPantryStaple || (hasPantrySetup && !pantryNames.has(i.name.toLowerCase()))
-  );
+  // Sorted: unchecked first, checked last
+  const mainItems = (list?.items ?? [])
+    .filter(i => !i.isPantryStaple || (hasPantrySetup && !pantryNames.has(i.name.toLowerCase())))
+    .sort((a, b) => Number(a.isChecked) - Number(b.isChecked));
+
+  const uncheckedCount = mainItems.filter(i => !i.isChecked).length;
 
   // Staples hidden from main list (user has them in pantry) — not shown at all
   // Staples still visible in collapsible (no pantry setup yet, or user said they don't have it)
@@ -74,7 +77,9 @@ export function GroceryListView() {
             <h2 className="text-lg font-semibold leading-tight">Grocery List</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               {hasItems
-                ? `${mainItems.length} item${mainItems.length !== 1 ? "s" : ""} to buy`
+                ? uncheckedCount > 0
+                  ? `${uncheckedCount} item${uncheckedCount !== 1 ? "s" : ""} left to buy`
+                  : "All done!"
                 : "Generate a plan to populate"}
             </p>
           </div>
