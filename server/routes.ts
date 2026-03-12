@@ -234,7 +234,8 @@ Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, a
       const plan = await storage.getCurrentMealPlan(userId);
       if (!plan) return res.status(404).json({ message: "No active plan found" });
 
-      await storage.swapMealInPlan(plan.id, day, mealId);
+      const normalizedDay = day.charAt(0).toUpperCase() + day.slice(1).toLowerCase();
+      await storage.swapMealInPlan(plan.id, normalizedDay, mealId);
       const updatedPlan = await storage.getCurrentMealPlan(userId);
       res.json(updatedPlan);
     } catch (err: any) {
