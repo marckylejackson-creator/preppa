@@ -137,6 +137,58 @@ Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, a
     }
   });
 
+  // User profile (onboarding)
+  app.get("/api/profile", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profile = await storage.getUserProfile(userId);
+      res.json(profile ?? null);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to fetch profile" });
+    }
+  });
+
+  app.post("/api/profile", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const profileSchema = z.object({
+        diets: z.array(z.string()).optional(),
+        allergies: z.array(z.string()).optional(),
+        adultCount: z.number().int().min(1).max(20).optional(),
+        kidCount: z.number().int().min(0).max(20).optional(),
+        groceryDay: z.string().optional(),
+        cookingNights: z.number().int().min(1).max(7).optional(),
+        dislikes: z.string().optional(),
+        groceryStore: z.string().optional(),
+        favoriteMeals: z.array(z.string()).optional(),
+        freezerItems: z.array(z.string()).optional(),
+      });
+      const data = profileSchema.parse(req.body);
+      const profile = await storage.saveUserProfile(userId, data);
+
+      // Save pantry staples from onboarding if provided via body.pantryStaples
+      const pantryStaples: string[] = Array.isArray(req.body.pantryStaples) ? req.body.pantryStaples : [];
+      if (pantryStaples.length > 0) {
+        const existing = await storage.getPantryItems(userId);
+        for (const item of existing) {
+          await storage.deletePantryItem(item.id, userId);
+        }
+        for (const name of pantryStaples) {
+          if (typeof name === "string" && name.trim()) {
+            await storage.addPantryItem({ userId, name: name.trim() });
+          }
+        }
+      }
+
+      res.json(profile);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      res.status(500).json({ message: "Failed to save profile" });
+    }
+  });
+
   app.get(api.mealPlans.current.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const plan = await storage.getCurrentMealPlan(userId);

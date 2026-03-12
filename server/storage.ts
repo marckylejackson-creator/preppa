@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { 
-  meals, mealIngredients, pantryItems, mealPlans, mealPlanMeals, groceryLists, groceryListItems, swapEvents,
+  meals, mealIngredients, pantryItems, mealPlans, mealPlanMeals, groceryLists, groceryListItems, swapEvents, userProfiles,
   type InsertMeal, type InsertPantryItem, type InsertMealIngredient, type MealCategory
 } from "@shared/schema";
 import { eq, and, desc, gte } from "drizzle-orm";
@@ -36,6 +36,10 @@ export interface IStorage {
   getGroceryListByPlanId(planId: number): Promise<any | null>;
   removeGroceryItem(id: number): Promise<void>;
   addGroceryItem(listId: number, item: { name: string; storeUnit?: string | null; isPantryStaple?: boolean }): Promise<any>;
+
+  // User profile / onboarding
+  getUserProfile(userId: string): Promise<any | null>;
+  saveUserProfile(userId: string, data: Partial<typeof userProfiles.$inferInsert>): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -224,6 +228,22 @@ export class DatabaseStorage implements IStorage {
     return Object.entries(counts)
       .map(([category, count]) => ({ category: category as MealCategory, count }))
       .sort((a, b) => b.count - a.count);
+  }
+
+  async getUserProfile(userId: string) {
+    const [profile] = await db.select().from(userProfiles).where(eq(userProfiles.userId, userId));
+    return profile ?? null;
+  }
+
+  async saveUserProfile(userId: string, data: Partial<typeof userProfiles.$inferInsert>) {
+    const existing = await this.getUserProfile(userId);
+    if (existing) {
+      const [updated] = await db.update(userProfiles).set(data).where(eq(userProfiles.userId, userId)).returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(userProfiles).values({ userId, ...data }).returning();
+      return created;
+    }
   }
 }
 

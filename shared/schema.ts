@@ -77,6 +77,20 @@ export const groceryListItems = pgTable("grocery_list_items", {
   isChecked: boolean("is_checked").default(false).notNull(),
 });
 
+export const userProfiles = pgTable("user_profiles", {
+  userId: text("user_id").primaryKey(),
+  diets: text("diets").array(),
+  allergies: text("allergies").array(),
+  adultCount: integer("adult_count").default(2),
+  kidCount: integer("kid_count").default(0),
+  groceryDay: text("grocery_day"),
+  cookingNights: integer("cooking_nights").default(5),
+  dislikes: text("dislikes"),
+  groceryStore: text("grocery_store"),
+  favoriteMeals: text("favorite_meals").array(),
+  freezerItems: text("freezer_items").array(),
+});
+
 export const insertMealSchema = createInsertSchema(meals).omit({ id: true });
 export const insertMealIngredientSchema = createInsertSchema(mealIngredients).omit({ id: true });
 export const insertPantryItemSchema = createInsertSchema(pantryItems).omit({ id: true });
