@@ -5,6 +5,7 @@ import { ShoppingCart, CheckCircle2, Circle, Copy, Check, ChevronDown, ChevronRi
 import { clsx } from "clsx";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { motion, AnimatePresence } from "framer-motion";
 
 export function GroceryListView() {
   const { data: list, isLoading } = useCurrentGroceryList();
@@ -108,20 +109,31 @@ export function GroceryListView() {
         ) : (
           <>
             {mainItems.map((item) => (
-              <button
+              <motion.button
                 key={item.id}
+                layout
                 onClick={() => handleToggle(item.id, item.isChecked)}
                 data-testid={`button-toggle-item-${item.id}`}
+                whileTap={{ scale: 0.97 }}
+                animate={{
+                  opacity: item.isChecked ? 0.45 : 1,
+                  x: item.isChecked ? 6 : 0,
+                }}
+                transition={{ type: "spring", stiffness: 400, damping: 28 }}
                 className={clsx(
-                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors",
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left",
                   item.isChecked
                     ? "bg-muted/40 border-transparent text-muted-foreground"
                     : "bg-background border-border text-foreground hover:border-primary/40"
                 )}
               >
-                <div className={clsx("shrink-0 transition-colors", item.isChecked ? "text-primary" : "text-muted-foreground")}>
+                <motion.div
+                  className={clsx("shrink-0", item.isChecked ? "text-primary" : "text-muted-foreground")}
+                  animate={{ scale: item.isChecked ? 1.15 : 1 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                >
                   {item.isChecked ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-                </div>
+                </motion.div>
                 <span className={clsx("flex-1 font-medium text-sm lowercase", item.isChecked && "line-through")}>
                   {item.name.toLowerCase()}
                 </span>
@@ -130,7 +142,7 @@ export function GroceryListView() {
                     {item.storeUnit}
                   </span>
                 )}
-              </button>
+              </motion.button>
             ))}
 
             {/* Collapsible pantry staples — only shown when no pantry setup yet */}
