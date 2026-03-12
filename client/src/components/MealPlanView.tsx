@@ -19,9 +19,6 @@ type ReasonTray = {
 };
 
 const DAYS_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-const DAY_ABBR: Record<string, string> = {
-  Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed", Thursday: "Thu", Friday: "Fri",
-};
 
 const SWAP_REASONS = [
   { label: "Too heavy", value: "too_heavy" },
@@ -174,9 +171,6 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
                     transition={{ delay: idx * 0.07 }}
                     className="flex items-center gap-3 p-3 rounded-2xl bg-secondary/30 border border-border/50 hover-elevate"
                   >
-                    <div className="w-10 shrink-0 font-display font-semibold text-sm text-muted-foreground">
-                      {DAY_ABBR[day]}
-                    </div>
                     <button
                       onClick={() => setSelectedMeal(dayMeal.meal)}
                       data-testid={`card-plan-meal-${day.toLowerCase()}`}
