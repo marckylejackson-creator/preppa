@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Navbar } from "@/components/Navbar";
 import { useHistory, type HistoryEntry } from "@/hooks/use-history";
-import { Calendar, ShoppingCart, ChevronDown, ChevronUp, UtensilsCrossed, Clock } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Calendar, ShoppingCart, ChevronDown, ChevronUp, UtensilsCrossed, Clock, Heart, CalendarPlus, Check, Loader2, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { clsx } from "clsx";
 
 const DAYS_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+const DAYS_SHORT: Record<string, string> = { Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed", Thursday: "Thu", Friday: "Fri" };
 
 function formatWeekOf(weekOf: string | null, createdAt: string) {
   const date = weekOf ? new Date(weekOf + "T12:00:00") : new Date(createdAt);
@@ -15,16 +20,71 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function WeekCard({ entry, index }: { entry: HistoryEntry; index: number }) {
-  const [groceryOpen, setGroceryOpen] = useState(false);
+function WeekCard({ entry, index, favorites, currentDayMap }: {
+  entry: HistoryEntry;
+  index: number;
+  favorites: string[];
+  currentDayMap: Record<string, string>;
+}) {
   const { plan, groceryList } = entry;
+  const { toast } = useToast();
+  const [groceryOpen, setGroceryOpen] = useState(false);
+  const [activeMeal, setActiveMeal] = useState<string | null>(null);
+  const [addMode, setAddMode] = useState<"none" | "plan">("none");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const weekLabel = index === 0 ? "Current / Most Recent Plan" : `Plan #${index + 1}`;
   const weekStartLabel = formatWeekOf(plan.weekOf, plan.createdAt);
   const shopDateLabel = groceryList ? formatDate(groceryList.createdAt) : null;
-
   const mainItems = groceryList?.items.filter(i => !i.isPantryStaple) ?? [];
   const stapleItems = groceryList?.items.filter(i => i.isPantryStaple) ?? [];
+
+  const isFav = (name: string) => favorites.map(f => f.toLowerCase()).includes(name.toLowerCase());
+
+  const addFavMutation = useMutation({
+    mutationFn: (updated: string[]) =>
+      apiRequest("PATCH", "/api/profile/favorites", { favorites: updated }).then(r => r.json()),
+    onSuccess: (_, updated) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+      const added = updated.length > (favorites.length);
+      toast({ description: added ? `Added to favorites!` : `Removed from favorites.` });
+    },
+    onError: () => toast({ description: "Couldn't update favorites.", variant: "destructive" }),
+  });
+
+  const addToPlanMutation = useMutation({
+    mutationFn: ({ mealName, day }: { mealName: string; day: string }) =>
+      apiRequest("POST", "/api/profile/add-to-plan", { mealName, day }).then(r => r.json()),
+    onSuccess: (_d, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/meal-plans/current"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/grocery-lists/current"] });
+      setActiveMeal(null);
+      setAddMode("none");
+      setSelectedDay(null);
+      toast({ description: `${vars.mealName} added to ${DAYS_SHORT[vars.day] ?? vars.day}!` });
+    },
+    onError: () => toast({ description: "Couldn't add to plan — try again.", variant: "destructive" }),
+  });
+
+  const handleTileClick = (mealName: string) => {
+    if (activeMeal === mealName) {
+      setActiveMeal(null);
+      setAddMode("none");
+      setSelectedDay(null);
+    } else {
+      setActiveMeal(mealName);
+      setAddMode("none");
+      setSelectedDay(null);
+    }
+  };
+
+  const handleToggleFav = (mealName: string) => {
+    if (isFav(mealName)) {
+      addFavMutation.mutate(favorites.filter(f => f.toLowerCase() !== mealName.toLowerCase()));
+    } else {
+      addFavMutation.mutate([...favorites, mealName]);
+    }
+  };
 
   return (
     <motion.div
@@ -34,6 +94,7 @@ function WeekCard({ entry, index }: { entry: HistoryEntry; index: number }) {
       className="bg-card border border-border/40 rounded-3xl overflow-hidden premium-shadow"
     >
       <div className="p-6">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
           <div>
             <span className="text-xs font-semibold text-primary uppercase tracking-widest">{weekLabel}</span>
@@ -50,19 +111,31 @@ function WeekCard({ entry, index }: { entry: HistoryEntry; index: number }) {
           )}
         </div>
 
+        {/* Day tiles */}
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
           {DAYS_ORDER.map(day => {
             const dayMeal = plan.meals.find(m => m.dayOfWeek === day);
+            const isActive = !!dayMeal && activeMeal === dayMeal.meal.name;
             return (
-              <div
+              <button
                 key={day}
-                className="rounded-2xl bg-secondary/40 border border-border/30 p-3 flex flex-col gap-1"
+                onClick={() => dayMeal && handleTileClick(dayMeal.meal.name)}
+                disabled={!dayMeal}
                 data-testid={`history-day-${plan.id}-${day}`}
+                className={clsx(
+                  "rounded-2xl border p-3 flex flex-col gap-1 text-left transition-all",
+                  dayMeal ? "cursor-pointer hover:border-primary/40" : "cursor-default",
+                  isActive
+                    ? "bg-primary/8 border-primary/40 ring-1 ring-primary/20"
+                    : "bg-secondary/40 border-border/30"
+                )}
               >
                 <span className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{day.slice(0, 3)}</span>
                 {dayMeal ? (
                   <>
-                    <span className="text-sm font-semibold text-foreground leading-tight">{dayMeal.meal.name}</span>
+                    <span className={clsx("text-sm font-semibold leading-tight", isActive ? "text-primary" : "text-foreground")}>
+                      {dayMeal.meal.name}
+                    </span>
                     <span className="text-xs text-muted-foreground flex items-center gap-1 mt-auto">
                       <Clock size={11} /> {dayMeal.meal.prepTimeMins}m
                     </span>
@@ -70,11 +143,117 @@ function WeekCard({ entry, index }: { entry: HistoryEntry; index: number }) {
                 ) : (
                   <span className="text-xs text-muted-foreground italic">—</span>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
 
+        {/* Action tray */}
+        <AnimatePresence>
+          {activeMeal && (
+            <motion.div
+              key={activeMeal}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-3 bg-secondary/30 border border-border/30 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-semibold text-foreground truncate pr-2">{activeMeal}</span>
+                  <button onClick={() => { setActiveMeal(null); setAddMode("none"); setSelectedDay(null); }}
+                    className="shrink-0 text-muted-foreground hover:text-foreground transition-colors">
+                    <X size={15} />
+                  </button>
+                </div>
+
+                {addMode === "none" && (
+                  <div className="flex flex-wrap gap-2">
+                    {/* Add to Favorites */}
+                    <button
+                      onClick={() => handleToggleFav(activeMeal)}
+                      disabled={addFavMutation.isPending}
+                      data-testid={`button-history-fav-${plan.id}`}
+                      className={clsx(
+                        "flex items-center gap-1.5 px-3 py-2 rounded-xl border text-sm font-medium transition-all",
+                        isFav(activeMeal)
+                          ? "bg-primary/10 border-primary/30 text-primary"
+                          : "bg-background border-border text-foreground hover:border-primary/40"
+                      )}
+                    >
+                      {addFavMutation.isPending
+                        ? <Loader2 size={13} className="animate-spin" />
+                        : <Heart size={13} className={isFav(activeMeal) ? "fill-primary" : ""} />}
+                      {isFav(activeMeal) ? "Saved to favorites" : "Add to favorites"}
+                    </button>
+
+                    {/* Add to this week's menu */}
+                    <button
+                      onClick={() => setAddMode("plan")}
+                      data-testid={`button-history-add-plan-${plan.id}`}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-border bg-background text-foreground hover:border-primary/40 text-sm font-medium transition-all"
+                    >
+                      <CalendarPlus size={13} />
+                      Add to this week's menu
+                    </button>
+                  </div>
+                )}
+
+                {addMode === "plan" && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-2">Pick a day — we'll swap whatever's there:</p>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {DAYS_ORDER.map(day => {
+                        const current = currentDayMap[day];
+                        const isSelected = selectedDay === day;
+                        return (
+                          <button
+                            key={day}
+                            onClick={() => setSelectedDay(isSelected ? null : day)}
+                            className={clsx(
+                              "flex flex-col items-start px-3 py-2 rounded-xl border text-sm transition-all",
+                              isSelected
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-background border-border text-foreground hover:border-primary/40"
+                            )}
+                          >
+                            <span className="font-semibold">{DAYS_SHORT[day]}</span>
+                            {current && (
+                              <span className={clsx("text-xs mt-0.5 truncate max-w-[80px]", isSelected ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                                {current}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setAddMode("none"); setSelectedDay(null); }}
+                        className="px-3 py-1.5 rounded-xl border border-border bg-background text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Back
+                      </button>
+                      <button
+                        disabled={!selectedDay || addToPlanMutation.isPending}
+                        onClick={() => activeMeal && selectedDay && addToPlanMutation.mutate({ mealName: activeMeal, day: selectedDay.toLowerCase() })}
+                        data-testid={`button-history-confirm-plan-${plan.id}`}
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40 transition-opacity"
+                      >
+                        {addToPlanMutation.isPending
+                          ? <Loader2 size={13} className="animate-spin" />
+                          : <><Check size={13} />Add to menu</>}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Grocery toggle */}
         {groceryList && (
           <div className="mt-4">
             <button
@@ -129,6 +308,16 @@ function WeekCard({ entry, index }: { entry: HistoryEntry; index: number }) {
 
 export default function History() {
   const { data: history, isLoading } = useHistory();
+  const { data: profile } = useQuery<any>({ queryKey: ["/api/profile"] });
+  const { data: currentPlan } = useQuery<any>({ queryKey: ["/api/meal-plans/current"] });
+
+  const favorites: string[] = useMemo(() => profile?.favoriteMeals ?? [], [profile]);
+
+  const currentDayMap: Record<string, string> = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const entry of currentPlan?.meals ?? []) map[entry.dayOfWeek] = entry.meal?.name ?? "Meal";
+    return map;
+  }, [currentPlan]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -136,7 +325,7 @@ export default function History() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         <div className="mb-8">
           <h1 className="text-3xl font-display font-bold text-foreground">Meal History</h1>
-          <p className="text-muted-foreground mt-1">See what your family ate and when you shopped each week.</p>
+          <p className="text-muted-foreground mt-1">See what your family ate — tap any meal to add it to favorites or this week's menu.</p>
         </div>
 
         {isLoading ? (
@@ -156,7 +345,13 @@ export default function History() {
         ) : (
           <div className="space-y-5">
             {history.map((entry, idx) => (
-              <WeekCard key={entry.plan.id} entry={entry} index={idx} />
+              <WeekCard
+                key={entry.plan.id}
+                entry={entry}
+                index={idx}
+                favorites={favorites}
+                currentDayMap={currentDayMap}
+              />
             ))}
           </div>
         )}
