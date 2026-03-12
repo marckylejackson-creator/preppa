@@ -106,7 +106,7 @@ function WeekCard({ entry, index, favorites }: {
         </div>
 
         {/* Meal tiles — no day labels */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <div className="grid grid-cols-1 gap-2">
           {DAYS_ORDER.map(day => {
             const dayMeal = plan.meals.find(m => m.dayOfWeek === day);
             if (!dayMeal) return (
