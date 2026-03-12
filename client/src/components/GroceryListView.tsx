@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useCurrentGroceryList, useToggleGroceryItem } from "@/hooks/use-grocery-lists";
+import { usePantry } from "@/hooks/use-pantry";
 import { ShoppingCart, CheckCircle2, Circle, Copy, Check, ChevronDown, ChevronRight, Package } from "lucide-react";
 import { clsx } from "clsx";
 import { Button } from "@/components/ui/button";
@@ -7,17 +8,34 @@ import { useToast } from "@/hooks/use-toast";
 
 export function GroceryListView() {
   const { data: list, isLoading } = useCurrentGroceryList();
+  const { data: pantryItems } = usePantry();
   const toggleItem = useToggleGroceryItem();
   const { toast } = useToast();
   const [pantryOpen, setPantryOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const pantryNames = new Set(
+    (pantryItems ?? []).map(p => p.name.toLowerCase())
+  );
+  const hasPantrySetup = (pantryItems ?? []).length > 0;
+
   const handleToggle = (id: number, currentStatus: boolean) => {
     toggleItem.mutate({ id, isChecked: !currentStatus });
   };
 
-  const mainItems = list?.items.filter((i) => !i.isPantryStaple) ?? [];
-  const pantryItems = list?.items.filter((i) => i.isPantryStaple) ?? [];
+  // Items the user needs to buy: non-staples + staples they don't have confirmed
+  const mainItems = (list?.items ?? []).filter(i =>
+    !i.isPantryStaple || (hasPantrySetup && !pantryNames.has(i.name.toLowerCase()))
+  );
+
+  // Staples hidden from main list (user has them in pantry) — not shown at all
+  // Staples still visible in collapsible (no pantry setup yet, or user said they don't have it)
+  const collapsiblePantryItems = (list?.items ?? []).filter(i =>
+    i.isPantryStaple && (!hasPantrySetup || pantryNames.has(i.name.toLowerCase()))
+  );
+
+  // When pantry is set up, hide the collapsible entirely — everything is already handled
+  const showCollapsible = collapsiblePantryItems.length > 0 && !hasPantrySetup;
 
   const buildCopyText = () => {
     const lines: string[] = [];
@@ -26,18 +44,8 @@ export function GroceryListView() {
     mainItems.forEach((item) => {
       const check = item.isChecked ? "✓" : "○";
       const unit = item.storeUnit ? ` — ${item.storeUnit}` : "";
-      lines.push(`${check} ${item.name}${unit}`);
+      lines.push(`${check} ${item.name.toLowerCase()}${unit}`);
     });
-    if (pantryItems.length > 0) {
-      lines.push("");
-      lines.push("Pantry / Staples");
-      lines.push("──────────────");
-      pantryItems.forEach((item) => {
-        const check = item.isChecked ? "✓" : "○";
-        const unit = item.storeUnit ? ` — ${item.storeUnit}` : "";
-        lines.push(`${check} ${item.name}${unit}`);
-      });
-    }
     return lines.join("\n");
   };
 
@@ -53,7 +61,7 @@ export function GroceryListView() {
     }
   };
 
-  const hasItems = (mainItems.length + pantryItems.length) > 0;
+  const hasItems = mainItems.length > 0 || collapsiblePantryItems.length > 0;
 
   return (
     <div className="bg-card rounded-2xl p-6 border border-card-border h-full flex flex-col">
@@ -65,7 +73,9 @@ export function GroceryListView() {
           <div>
             <h2 className="text-lg font-semibold leading-tight">Grocery List</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {hasItems ? `${mainItems.length} item${mainItems.length !== 1 ? "s" : ""} to buy` : "Generate a plan to populate"}
+              {hasItems
+                ? `${mainItems.length} item${mainItems.length !== 1 ? "s" : ""} to buy`
+                : "Generate a plan to populate"}
             </p>
           </div>
         </div>
@@ -98,7 +108,6 @@ export function GroceryListView() {
           </div>
         ) : (
           <>
-            {/* Main shopping items */}
             {mainItems.map((item) => (
               <button
                 key={item.id}
@@ -114,8 +123,8 @@ export function GroceryListView() {
                 <div className={clsx("shrink-0 transition-colors", item.isChecked ? "text-primary" : "text-muted-foreground")}>
                   {item.isChecked ? <CheckCircle2 size={18} /> : <Circle size={18} />}
                 </div>
-                <span className={clsx("flex-1 font-medium text-sm", item.isChecked && "line-through")}>
-                  {item.name}
+                <span className={clsx("flex-1 font-medium text-sm lowercase", item.isChecked && "line-through")}>
+                  {item.name.toLowerCase()}
                 </span>
                 {item.storeUnit && (
                   <span className={clsx("text-xs shrink-0", item.isChecked ? "text-muted-foreground/50" : "text-muted-foreground")}>
@@ -125,8 +134,8 @@ export function GroceryListView() {
               </button>
             ))}
 
-            {/* Pantry staples collapsible section */}
-            {pantryItems.length > 0 && (
+            {/* Collapsible pantry staples — only shown when no pantry setup yet */}
+            {showCollapsible && (
               <div className="mt-3">
                 <button
                   onClick={() => setPantryOpen((o) => !o)}
@@ -136,12 +145,12 @@ export function GroceryListView() {
                   {pantryOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                   <Package size={14} />
                   <span className="font-medium">Pantry Staples</span>
-                  <span className="ml-auto text-xs bg-muted rounded-full px-2 py-0.5">{pantryItems.length}</span>
+                  <span className="ml-auto text-xs bg-muted rounded-full px-2 py-0.5">{collapsiblePantryItems.length}</span>
                 </button>
 
                 {pantryOpen && (
                   <div className="space-y-2 mt-1 pl-1">
-                    {pantryItems.map((item) => (
+                    {collapsiblePantryItems.map((item) => (
                       <button
                         key={item.id}
                         onClick={() => handleToggle(item.id, item.isChecked)}
@@ -156,8 +165,8 @@ export function GroceryListView() {
                         <div className={clsx("shrink-0 transition-colors", item.isChecked ? "text-primary" : "text-muted-foreground")}>
                           {item.isChecked ? <CheckCircle2 size={18} /> : <Circle size={18} />}
                         </div>
-                        <span className={clsx("flex-1 font-medium text-sm", item.isChecked && "line-through")}>
-                          {item.name}
+                        <span className={clsx("flex-1 font-medium text-sm lowercase", item.isChecked && "line-through")}>
+                          {item.name.toLowerCase()}
                         </span>
                         {item.storeUnit && (
                           <span className={clsx("text-xs shrink-0", item.isChecked ? "text-muted-foreground/50" : "text-muted-foreground")}>

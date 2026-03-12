@@ -114,6 +114,29 @@ Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, a
     res.status(204).send();
   });
 
+  // Bulk replace pantry items (used for first-time pantry setup)
+  app.post("/api/pantry/bulk", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { names } = req.body;
+      if (!Array.isArray(names)) return res.status(400).json({ message: "names must be an array" });
+      const existing = await storage.getPantryItems(userId);
+      for (const item of existing) {
+        await storage.deletePantryItem(item.id, userId);
+      }
+      const results = [];
+      for (const name of names) {
+        if (typeof name === "string" && name.trim()) {
+          const item = await storage.addPantryItem({ userId, name: name.trim() });
+          results.push(item);
+        }
+      }
+      res.json(results);
+    } catch (err) {
+      res.status(500).json({ message: "Failed to save pantry" });
+    }
+  });
+
   app.get(api.mealPlans.current.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const plan = await storage.getCurrentMealPlan(userId);

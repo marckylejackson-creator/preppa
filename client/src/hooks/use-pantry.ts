@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
+import { apiRequest } from "@/lib/queryClient";
 
 export function usePantry() {
   return useQuery({
@@ -42,6 +43,19 @@ export function useRemovePantryItem() {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to remove pantry item");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.pantry.list.path] });
+    },
+  });
+}
+
+export function useBulkSavePantry() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (names: string[]) => {
+      const res = await apiRequest("POST", "/api/pantry/bulk", { names });
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.pantry.list.path] });
