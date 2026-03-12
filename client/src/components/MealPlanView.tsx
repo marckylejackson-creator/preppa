@@ -176,7 +176,7 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
                       data-testid={`card-plan-meal-${day.toLowerCase()}`}
                       className={`flex-1 text-left bg-card px-4 py-2.5 rounded-xl border border-border/50 premium-shadow min-w-0 transition-opacity hover:border-primary/30 hover:bg-primary/5 ${isSwapping ? "opacity-40 pointer-events-none" : ""}`}
                     >
-                      <div className="font-bold text-foreground text-sm leading-snug">{dayMeal.meal.name}</div>
+                      <div className="font-bold text-primary text-sm leading-snug">{dayMeal.meal.name}</div>
                       <div className="flex items-center gap-1 mt-0.5 text-muted-foreground">
                         <Clock size={11} />
                         <span className="text-xs font-medium">{dayMeal.meal.prepTimeMins} min</span>

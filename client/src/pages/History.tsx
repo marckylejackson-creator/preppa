@@ -119,41 +119,42 @@ function WeekCard({ entry, index, favorites }: {
             return (
               <div
                 key={day}
-                className="group/tile relative rounded-2xl bg-secondary/40 border border-border/30 p-3 flex flex-col gap-2 hover:border-border/60 transition-colors"
+                className="group/tile relative rounded-2xl bg-secondary/40 border border-border/30 p-3 flex flex-col gap-1.5 hover:border-border/60 transition-colors"
                 data-testid={`history-day-${plan.id}-${day}`}
               >
-                {/* Action icons — always visible, bigger for touch */}
-                <div className="flex items-center justify-end gap-1">
-                  <button
-                    onClick={e => handleToggleFav(e, dayMeal.meal.name)}
-                    disabled={addFavMutation.isPending}
-                    data-testid={`button-fav-${plan.id}-${day}`}
-                    title={favd ? "Remove from favorites" : "Add to favorites"}
-                    className={clsx(
-                      "w-8 h-8 flex items-center justify-center rounded-xl transition-colors",
-                      favd
-                        ? "text-primary hover:text-primary/70"
-                        : "text-muted-foreground hover:text-primary"
-                    )}
-                  >
-                    <Heart size={16} className={favd ? "fill-primary" : ""} />
-                  </button>
-                  <button
-                    onClick={e => handleAddToMenu(e, dayMeal.meal.name, dayMeal.dayOfWeek)}
-                    disabled={addToPlanMutation.isPending}
-                    data-testid={`button-add-plan-${plan.id}-${day}`}
-                    title="Add to this week's menu"
-                    className="w-8 h-8 flex items-center justify-center rounded-xl text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    {isAddingThis
-                      ? <Loader2 size={16} className="animate-spin" />
-                      : <CalendarPlus size={16} />}
-                  </button>
+                {/* Title row with icons aligned */}
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 text-sm font-semibold text-foreground leading-tight">{dayMeal.meal.name}</span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={e => handleToggleFav(e, dayMeal.meal.name)}
+                      disabled={addFavMutation.isPending}
+                      data-testid={`button-fav-${plan.id}-${day}`}
+                      title={favd ? "Remove from favorites" : "Add to favorites"}
+                      className={clsx(
+                        "w-10 h-10 flex items-center justify-center rounded-xl transition-colors",
+                        favd
+                          ? "text-primary hover:text-primary/70"
+                          : "text-muted-foreground hover:text-primary"
+                      )}
+                    >
+                      <Heart size={20} className={favd ? "fill-primary" : ""} />
+                    </button>
+                    <button
+                      onClick={e => handleAddToMenu(e, dayMeal.meal.name, dayMeal.dayOfWeek)}
+                      disabled={addToPlanMutation.isPending}
+                      data-testid={`button-add-plan-${plan.id}-${day}`}
+                      title="Add to this week's menu"
+                      className="w-10 h-10 flex items-center justify-center rounded-xl text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {isAddingThis
+                        ? <Loader2 size={20} className="animate-spin" />
+                        : <CalendarPlus size={20} />}
+                    </button>
+                  </div>
                 </div>
 
-                {/* Meal info */}
-                <span className="text-sm font-semibold text-foreground leading-tight">{dayMeal.meal.name}</span>
-                <span className="text-xs text-muted-foreground flex items-center gap-1 mt-auto">
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Clock size={11} /> {dayMeal.meal.prepTimeMins}m
                 </span>
               </div>
