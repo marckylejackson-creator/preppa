@@ -38,15 +38,14 @@ export function GroceryListView() {
   const showCollapsible = collapsiblePantryItems.length > 0 && !hasPantrySetup;
 
   const buildCopyText = () => {
-    const lines: string[] = [];
-    lines.push("🛒 Grocery List");
-    lines.push("──────────────");
-    mainItems.forEach((item) => {
-      const check = item.isChecked ? "✓" : "○";
-      const unit = item.storeUnit ? ` — ${item.storeUnit}` : "";
-      lines.push(`${check} ${item.name.toLowerCase()}${unit}`);
-    });
-    return lines.join("\n");
+    return mainItems
+      .filter(i => !i.isChecked)
+      .map(i => {
+        const name = i.name.toLowerCase();
+        const qty = i.storeUnit ? ` (${i.storeUnit})` : "";
+        return `${name}${qty}`;
+      })
+      .join("\n");
   };
 
   const handleCopy = async () => {
