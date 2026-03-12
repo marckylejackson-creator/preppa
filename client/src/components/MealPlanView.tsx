@@ -24,7 +24,7 @@ const SWAP_REASONS = [
   { label: "Too heavy", value: "too_heavy" },
   { label: "Takes too long", value: "too_long" },
   { label: "Had it recently", value: "had_recently" },
-  { label: "Want variety", value: "want_variety" },
+  { label: "Kids won't eat it", value: "kids_wont_eat" },
 ];
 
 const TRAY_TIMEOUT_MS = 5000;
