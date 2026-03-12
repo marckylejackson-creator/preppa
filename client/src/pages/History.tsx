@@ -110,7 +110,7 @@ function WeekCard({ entry, index, favorites }: {
           {DAYS_ORDER.map(day => {
             const dayMeal = plan.meals.find(m => m.dayOfWeek === day);
             if (!dayMeal) return (
-              <div key={day} className="rounded-2xl bg-secondary/20 border border-border/20 p-3 flex items-center justify-center min-h-[80px]">
+              <div key={day} className="rounded-xl bg-secondary/20 border border-border/20 px-4 py-2.5 flex items-center justify-center min-h-[52px]">
                 <span className="text-xs text-muted-foreground/50 italic">—</span>
               </div>
             );
@@ -119,7 +119,7 @@ function WeekCard({ entry, index, favorites }: {
             return (
               <div
                 key={day}
-                className="group/tile relative rounded-2xl bg-secondary/40 border border-border/30 p-3 flex flex-col gap-1.5 hover:border-border/60 transition-colors"
+                className="group/tile relative rounded-xl bg-secondary/40 border border-border/30 px-4 py-2.5 flex flex-col gap-1 hover:border-border/60 transition-colors"
                 data-testid={`history-day-${plan.id}-${day}`}
               >
                 {/* Title row with icons aligned */}

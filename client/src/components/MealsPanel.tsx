@@ -139,28 +139,28 @@ export function MealsPanel() {
                 exit={{ opacity: 0, scale: 0.97 }}
                 transition={{ duration: 0.18 }}
               >
-                <div className="rounded-2xl border border-border/50 bg-background/50 overflow-hidden">
+                <div className="rounded-xl border border-border/50 bg-background/50 overflow-hidden">
                   {/* Row */}
-                  <div className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex items-center gap-2 px-4 py-2.5">
                     <p className="flex-1 font-semibold text-sm text-foreground">{meal}</p>
                     <button
                       data-testid={`button-add-to-menu-${meal}`}
                       onClick={() => handleAddToMenu(meal)}
                       disabled={addToPlan.isPending}
                       title="Add to this week's menu"
-                      className="p-2 rounded-xl transition-colors text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-40"
+                      className="w-10 h-10 flex items-center justify-center rounded-xl transition-colors text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-40"
                     >
                       {addingMeal === meal && addToPlan.isPending
-                        ? <Loader2 size={16} className="animate-spin" />
-                        : <CalendarPlus size={16} />}
+                        ? <Loader2 size={20} className="animate-spin" />
+                        : <CalendarPlus size={20} />}
                     </button>
                     <button
                       data-testid={`button-delete-favorite-${meal}`}
                       onClick={() => openDelete(meal)}
                       title="Remove from favorites"
-                      className={`p-2 rounded-xl transition-colors ${deletingMeal === meal ? "bg-destructive/10 text-destructive" : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"}`}
+                      className={`w-10 h-10 flex items-center justify-center rounded-xl transition-colors ${deletingMeal === meal ? "bg-destructive/10 text-destructive" : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"}`}
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={20} />
                     </button>
                   </div>
 
