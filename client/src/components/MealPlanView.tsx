@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCurrentMealPlan, useGenerateMealPlan } from "@/hooks/use-meal-plans";
 import { api } from "@shared/routes";
-import { Calendar, Wand2, Loader2, ArrowRightLeft } from "lucide-react";
+import { Calendar, Wand2, Loader2, ArrowRightLeft, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -19,6 +19,9 @@ type ReasonTray = {
 };
 
 const DAYS_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+const DAY_ABBR: Record<string, string> = {
+  Monday: "Mon", Tuesday: "Tue", Wednesday: "Wed", Thursday: "Thu", Friday: "Fri",
+};
 
 const SWAP_REASONS = [
   { label: "Too heavy", value: "too_heavy" },
@@ -171,8 +174,8 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
                     transition={{ delay: idx * 0.07 }}
                     className="flex items-center gap-3 p-3 rounded-2xl bg-secondary/30 border border-border/50 hover-elevate"
                   >
-                    <div className="w-24 shrink-0 font-display font-semibold text-sm text-muted-foreground">
-                      {day}
+                    <div className="w-10 shrink-0 font-display font-semibold text-sm text-muted-foreground">
+                      {DAY_ABBR[day]}
                     </div>
                     <button
                       onClick={() => setSelectedMeal(dayMeal.meal)}
@@ -180,8 +183,9 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
                       className={`flex-1 text-left bg-card px-4 py-2.5 rounded-xl border border-border/50 premium-shadow min-w-0 transition-opacity hover:border-primary/30 hover:bg-primary/5 ${isSwapping ? "opacity-40 pointer-events-none" : ""}`}
                     >
                       <div className="font-bold text-foreground text-sm leading-snug">{dayMeal.meal.name}</div>
-                      <div className="text-xs font-medium text-primary mt-0.5">
-                        {dayMeal.meal.prepTimeMins} mins prep
+                      <div className="flex items-center gap-1 mt-0.5 text-muted-foreground">
+                        <Clock size={11} />
+                        <span className="text-xs font-medium">{dayMeal.meal.prepTimeMins} min</span>
                       </div>
                     </button>
                     <button
