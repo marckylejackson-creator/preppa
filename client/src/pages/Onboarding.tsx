@@ -175,19 +175,18 @@ function CelebrationScreen() {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Onboarding() {
-  const [location, navigate] = useLocation();
-  const isEditing = location === "/preferences";
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
   const [answers, setAnswers] = useState<Answers>(DEFAULT);
   const [showCelebration, setShowCelebration] = useState(false);
 
-  // Pre-fill existing profile data when in edit mode
+  // Always fetch profile — used to detect edit mode and pre-fill answers
   const { data: existingProfile } = useQuery<any>({
     queryKey: ["/api/profile"],
-    enabled: isEditing,
   });
+  const isEditing = !!existingProfile;
 
   useEffect(() => {
     if (!existingProfile) return;
@@ -281,7 +280,7 @@ export default function Onboarding() {
       queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
       if (isEditing) {
         toast({ title: "Preferences saved!", description: "Your meal plans will reflect your updates going forward." });
-        navigate("/");
+        navigate("/preferences");
       } else {
         setShowCelebration(true);
         setTimeout(() => navigate("/"), 3000);
@@ -320,12 +319,12 @@ export default function Onboarding() {
         {isEditing ? (
           <div className="flex items-center gap-3 mb-8">
             <button
-              onClick={() => navigate("/")}
+              onClick={() => navigate("/preferences")}
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              data-testid="button-back-to-dashboard"
+              data-testid="button-back-to-preferences"
             >
               <ArrowLeft size={15} />
-              Back to dashboard
+              Back to preferences
             </button>
             <span className="text-muted-foreground/40">·</span>
             <span className="text-sm font-semibold text-foreground">Edit Preferences</span>

@@ -110,7 +110,7 @@ export function Navbar() {
                     className="flex items-center gap-2.5 cursor-pointer"
                   >
                     <Settings size={15} className="text-muted-foreground" />
-                    Edit Preferences
+                    Preferences
                   </Link>
                 </DropdownMenuItem>
 

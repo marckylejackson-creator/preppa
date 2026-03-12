@@ -13,6 +13,7 @@ import History from "@/pages/History";
 import Meals from "@/pages/Meals";
 import GuestDashboard from "@/pages/GuestDashboard";
 import Onboarding from "@/pages/Onboarding";
+import Preferences from "@/pages/Preferences";
 
 function AppContent() {
   const { user, isLoading } = useAuth();
@@ -48,7 +49,7 @@ function AppContent() {
   return (
     <Switch>
       <Route path="/onboarding" component={Onboarding} />
-      <Route path="/preferences" component={Onboarding} />
+      <Route path="/preferences" component={Preferences} />
       <Route path="/" component={Dashboard} />
       <Route path="/meals" component={Meals} />
       <Route path="/history" component={History} />
