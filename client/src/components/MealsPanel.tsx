@@ -5,7 +5,6 @@ import { Heart, Search, CalendarPlus, Trash2, X, Loader2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
-const DAYS_ORDER = ["monday", "tuesday", "wednesday", "thursday", "friday"] as const;
 
 const DELETE_REASONS = [
   "Already in our rotation",
@@ -22,24 +21,12 @@ export function MealsPanel() {
   const [addingMeal, setAddingMeal] = useState<string | null>(null);
 
   const { data: profile, isLoading } = useQuery<any>({ queryKey: ["/api/profile"] });
-  const { data: plan } = useQuery<any>({ queryKey: ["/api/meal-plans/current"] });
 
   const favorites: string[] = useMemo(() => profile?.favoriteMeals ?? [], [profile]);
   const filtered = useMemo(
     () => favorites.filter(f => f.toLowerCase().includes(search.toLowerCase())),
     [favorites, search]
   );
-
-  const takenDays = useMemo(() => {
-    const days = new Set<string>();
-    for (const entry of plan?.meals ?? []) days.add(entry.dayOfWeek?.toLowerCase());
-    return days;
-  }, [plan]);
-
-  const pickDay = () => {
-    const open = DAYS_ORDER.find(d => !takenDays.has(d));
-    return open ?? "monday";
-  };
 
   const removeFav = useMutation({
     mutationFn: (updated: string[]) =>
@@ -54,13 +41,13 @@ export function MealsPanel() {
   });
 
   const addToPlan = useMutation({
-    mutationFn: ({ mealName, day }: { mealName: string; day: string }) =>
-      apiRequest("POST", "/api/profile/add-to-plan", { mealName, day }).then(r => r.json()),
-    onSuccess: (_d, vars) => {
+    mutationFn: (mealName: string) =>
+      apiRequest("POST", "/api/profile/add-to-plan", { mealName }).then(r => r.json()),
+    onSuccess: (_d, mealName) => {
       queryClient.invalidateQueries({ queryKey: ["/api/meal-plans/current"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grocery-lists/current"] });
       setAddingMeal(null);
-      toast({ description: `${vars.mealName} added to this week's menu!` });
+      toast({ description: `${mealName} added to this week's menu!` });
     },
     onError: () => {
       setAddingMeal(null);
@@ -73,7 +60,7 @@ export function MealsPanel() {
     setDeletingMeal(null);
     setDeleteReason(null);
     setAddingMeal(meal);
-    addToPlan.mutate({ mealName: meal, day: pickDay() });
+    addToPlan.mutate(meal);
   };
 
   const openDelete = (meal: string) => {

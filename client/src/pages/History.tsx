@@ -9,7 +9,6 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { clsx } from "clsx";
 
-const DAYS_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
 function formatWeekOf(weekOf: string | null, createdAt: string) {
   const date = weekOf ? new Date(weekOf + "T12:00:00") : new Date(createdAt);
@@ -50,13 +49,13 @@ function WeekCard({ entry, index, favorites }: {
   });
 
   const addToPlanMutation = useMutation({
-    mutationFn: ({ mealName, day }: { mealName: string; day: string }) =>
-      apiRequest("POST", "/api/profile/add-to-plan", { mealName, day }).then(r => r.json()),
-    onSuccess: (_d, vars) => {
+    mutationFn: (mealName: string) =>
+      apiRequest("POST", "/api/profile/add-to-plan", { mealName }).then(r => r.json()),
+    onSuccess: (_d, mealName) => {
       queryClient.invalidateQueries({ queryKey: ["/api/meal-plans/current"] });
       queryClient.invalidateQueries({ queryKey: ["/api/grocery-lists/current"] });
       setAddingMeal(null);
-      toast({ description: `${vars.mealName} added to this week's menu!` });
+      toast({ description: `${mealName} added to this week's menu!` });
     },
     onError: () => {
       setAddingMeal(null);
@@ -73,11 +72,11 @@ function WeekCard({ entry, index, favorites }: {
     }
   };
 
-  const handleAddToMenu = (e: React.MouseEvent, mealName: string, day: string) => {
+  const handleAddToMenu = (e: React.MouseEvent, mealName: string) => {
     e.stopPropagation();
     if (addToPlanMutation.isPending) return;
     setAddingMeal(mealName);
-    addToPlanMutation.mutate({ mealName, day: day.toLowerCase() });
+    addToPlanMutation.mutate(mealName);
   };
 
   return (
@@ -107,20 +106,14 @@ function WeekCard({ entry, index, favorites }: {
 
         {/* Meal tiles — no day labels */}
         <div className="grid grid-cols-1 gap-2">
-          {DAYS_ORDER.map(day => {
-            const dayMeal = plan.meals.find(m => m.dayOfWeek === day);
-            if (!dayMeal) return (
-              <div key={day} className="rounded-xl bg-secondary/20 border border-border/20 px-4 py-2.5 flex items-center justify-center min-h-[52px]">
-                <span className="text-xs text-muted-foreground/50 italic">—</span>
-              </div>
-            );
+          {plan.meals.map((dayMeal: any) => {
             const favd = isFav(dayMeal.meal.name);
             const isAddingThis = addingMeal === dayMeal.meal.name;
             return (
               <div
-                key={day}
+                key={dayMeal.mealId}
                 className="group/tile relative rounded-xl bg-secondary/40 border border-border/30 px-4 py-2.5 flex flex-col gap-1 hover:border-border/60 transition-colors"
-                data-testid={`history-day-${plan.id}-${day}`}
+                data-testid={`history-meal-${plan.id}-${dayMeal.mealId}`}
               >
                 {/* Title row with icons aligned */}
                 <div className="flex items-center gap-2">
@@ -129,7 +122,7 @@ function WeekCard({ entry, index, favorites }: {
                     <button
                       onClick={e => handleToggleFav(e, dayMeal.meal.name)}
                       disabled={addFavMutation.isPending}
-                      data-testid={`button-fav-${plan.id}-${day}`}
+                      data-testid={`button-fav-${plan.id}-${dayMeal.mealId}`}
                       title={favd ? "Remove from favorites" : "Add to favorites"}
                       className={clsx(
                         "w-10 h-10 flex items-center justify-center rounded-xl transition-colors",
@@ -141,9 +134,9 @@ function WeekCard({ entry, index, favorites }: {
                       <Heart size={20} className={favd ? "fill-primary" : ""} />
                     </button>
                     <button
-                      onClick={e => handleAddToMenu(e, dayMeal.meal.name, dayMeal.dayOfWeek)}
+                      onClick={e => handleAddToMenu(e, dayMeal.meal.name)}
                       disabled={addToPlanMutation.isPending}
-                      data-testid={`button-add-plan-${plan.id}-${day}`}
+                      data-testid={`button-add-plan-${plan.id}-${dayMeal.mealId}`}
                       title="Add to this week's menu"
                       className="w-10 h-10 flex items-center justify-center rounded-xl text-muted-foreground hover:text-primary transition-colors"
                     >

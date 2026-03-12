@@ -18,7 +18,6 @@ type ReasonTray = {
   swapEventId: number;
 };
 
-const DAYS_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
 const SWAP_REASONS = [
   { label: "Just not in the mood", value: "not_in_mood" },
@@ -163,14 +162,13 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
           </div>
         ) : (
           <div className="space-y-1.5">
-            {DAYS_ORDER.map((day, idx) => {
-              const dayMeal = plan.meals.find((m: any) => m.dayOfWeek === day);
-              if (!dayMeal) return null;
+            {plan.meals.map((dayMeal: any, idx: number) => {
+              const day = dayMeal.dayOfWeek;
               const isSwapping = swappingDay === day;
               const showTray = reasonTray?.day === day;
 
               return (
-                <div key={day}>
+                <div key={dayMeal.mealId}>
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}

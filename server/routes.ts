@@ -202,11 +202,11 @@ Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, a
     }
   });
 
-  // Add a named favorite meal to the current week's plan on a specific day
+  // Add a named meal to the current week's plan — auto-assigns to the first open slot
   app.post("/api/profile/add-to-plan", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const { mealName, day } = z.object({ mealName: z.string(), day: z.string() }).parse(req.body);
+      const { mealName } = z.object({ mealName: z.string() }).parse(req.body);
 
       // Find meal by name (case-insensitive, first match)
       const allMeals = await storage.getMeals(userId);
@@ -221,7 +221,6 @@ Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, a
       if (matched) {
         mealId = matched.id;
       } else {
-        // Create a minimal meal record so it can be scheduled
         const created = await storage.createMeal(userId, {
           name: mealName,
           prepTimeMins: 30,
@@ -234,8 +233,12 @@ Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, a
       const plan = await storage.getCurrentMealPlan(userId);
       if (!plan) return res.status(404).json({ message: "No active plan found" });
 
-      const normalizedDay = day.charAt(0).toUpperCase() + day.slice(1).toLowerCase();
-      await storage.swapMealInPlan(plan.id, normalizedDay, mealId);
+      // Pick the first slot that isn't already occupied, fall back to the first slot
+      const allDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+      const usedDays = new Set(plan.meals.map((m: any) => m.dayOfWeek));
+      const targetDay = allDays.find(d => !usedDays.has(d)) ?? allDays[0];
+
+      await storage.swapMealInPlan(plan.id, targetDay, mealId);
       const updatedPlan = await storage.getCurrentMealPlan(userId);
       res.json(updatedPlan);
     } catch (err: any) {
