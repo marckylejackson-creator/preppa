@@ -83,7 +83,7 @@ export function MealsPanel() {
           <Heart size={20} />
         </div>
         <div>
-          <h2 className="text-xl font-display font-bold">Family Favorites</h2>
+          <h2 className="text-xl font-display font-bold">Favorites</h2>
           <p className="text-sm text-muted-foreground">
             {favorites.length > 0 ? `${favorites.length} saved meals` : "No favorites saved yet"}
           </p>
