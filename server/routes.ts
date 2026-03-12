@@ -189,6 +189,60 @@ Write 4–6 numbered steps. Keep each step short (1–2 sentences), practical, a
     }
   });
 
+  // Update favorites list (used when deleting a favorite)
+  app.patch("/api/profile/favorites", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { favorites } = z.object({ favorites: z.array(z.string()) }).parse(req.body);
+      const updated = await storage.saveUserProfile(userId, { favoriteMeals: favorites });
+      res.json(updated);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update favorites" });
+    }
+  });
+
+  // Add a named favorite meal to the current week's plan on a specific day
+  app.post("/api/profile/add-to-plan", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { mealName, day } = z.object({ mealName: z.string(), day: z.string() }).parse(req.body);
+
+      // Find meal by name (case-insensitive, first match)
+      const allMeals = await storage.getMeals(userId);
+      const matched = allMeals.find(
+        (m: any) => m.name.toLowerCase() === mealName.toLowerCase()
+      ) || allMeals.find(
+        (m: any) => m.name.toLowerCase().includes(mealName.toLowerCase()) ||
+                    mealName.toLowerCase().includes(m.name.toLowerCase().split(" ")[0])
+      );
+
+      let mealId: number;
+      if (matched) {
+        mealId = matched.id;
+      } else {
+        // Create a minimal meal record so it can be scheduled
+        const created = await storage.createMeal(userId, {
+          name: mealName,
+          prepTimeMins: 30,
+          isPreset: false,
+          ingredients: [],
+        });
+        mealId = created.id;
+      }
+
+      const plan = await storage.getCurrentMealPlan(userId);
+      if (!plan) return res.status(404).json({ message: "No active plan found" });
+
+      await storage.swapMealInPlan(plan.id, day, mealId);
+      const updatedPlan = await storage.getCurrentMealPlan(userId);
+      res.json(updatedPlan);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to add meal to plan" });
+    }
+  });
+
   app.get(api.mealPlans.current.path, isAuthenticated, async (req: any, res) => {
     const userId = req.user.claims.sub;
     const plan = await storage.getCurrentMealPlan(userId);
