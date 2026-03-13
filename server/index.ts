@@ -2,7 +2,6 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { execSync } from "child_process";
 
 const app = express();
 const httpServer = createServer(app);
@@ -92,13 +91,15 @@ app.use((req, res, next) => {
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
 
-  // Free the port before binding — handles stale processes from previous runs
-  try {
-    execSync(`fuser -k ${port}/tcp`, { stdio: "ignore" });
-    await new Promise(resolve => setTimeout(resolve, 500));
-  } catch (_) {}
+  // Graceful shutdown — releases the port cleanly so restarts don't get EADDRINUSE
+  const shutdown = () => {
+    httpServer.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 5000);
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
 
-  httpServer.listen({ port, host: "0.0.0.0" }, () => {
+  httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
     log(`serving on port ${port}`);
   });
 })();
