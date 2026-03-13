@@ -91,13 +91,9 @@ app.use((req, res, next) => {
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
 
-  // Graceful shutdown — releases the port cleanly so restarts don't get EADDRINUSE
-  const shutdown = () => {
-    httpServer.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 5000);
-  };
-  process.on("SIGTERM", shutdown);
-  process.on("SIGINT", shutdown);
+  // Exit immediately on SIGTERM so the port is released before the next process starts
+  process.on("SIGTERM", () => process.exit(0));
+  process.on("SIGINT", () => process.exit(0));
 
   httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
     log(`serving on port ${port}`);
