@@ -38,7 +38,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pkill -f 'tsx server/index' 2>/dev/null; sleep 1; NODE_ENV=development exec node_modules/.bin/tsx server/index.ts"
+args = "bash start.sh"
 waitForPort = 5000
 
 [agent]
