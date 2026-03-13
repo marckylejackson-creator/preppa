@@ -94,19 +94,7 @@ app.use((req, res, next) => {
   process.on("SIGTERM", () => process.exit(0));
   process.on("SIGINT", () => process.exit(0));
 
-  const listen = (retriesLeft: number) => {
-    httpServer.listen({ port, host: "0.0.0.0" }, () => {
-      log(`serving on port ${port}`);
-    });
-    httpServer.once("error", (err: NodeJS.ErrnoException) => {
-      if (err.code === "EADDRINUSE" && retriesLeft > 0) {
-        log(`port ${port} busy, retrying in 1s… (${retriesLeft} left)`);
-        httpServer.close();
-        setTimeout(() => listen(retriesLeft - 1), 1000);
-      } else {
-        throw err;
-      }
-    });
-  };
-  listen(10);
+  httpServer.listen(port, "0.0.0.0", () => {
+    log(`serving on port ${port}`);
+  });
 })();
