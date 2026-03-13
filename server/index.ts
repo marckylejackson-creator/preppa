@@ -91,11 +91,22 @@ app.use((req, res, next) => {
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
 
-  // Exit immediately on SIGTERM so the port is released before the next process starts
   process.on("SIGTERM", () => process.exit(0));
   process.on("SIGINT", () => process.exit(0));
 
-  httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
-    log(`serving on port ${port}`);
-  });
+  const listen = (retriesLeft: number) => {
+    httpServer.listen({ port, host: "0.0.0.0" }, () => {
+      log(`serving on port ${port}`);
+    });
+    httpServer.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE" && retriesLeft > 0) {
+        log(`port ${port} busy, retrying in 1s… (${retriesLeft} left)`);
+        httpServer.close();
+        setTimeout(() => listen(retriesLeft - 1), 1000);
+      } else {
+        throw err;
+      }
+    });
+  };
+  listen(10);
 })();
