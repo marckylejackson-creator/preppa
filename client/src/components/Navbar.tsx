@@ -38,7 +38,7 @@ export function Navbar() {
   ];
 
   return (
-    <nav className="sticky top-0 z-50 w-full glass-panel border-b-0 border-x-0 border-t-0 bg-white/80">
+    <nav className="sticky top-0 z-50 w-full bg-white border-b border-border/30 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
           {/* Logo + nav links */}
@@ -91,7 +91,7 @@ export function Navbar() {
                 </button>
               </DropdownMenuTrigger>
 
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-52 bg-white border border-border/40 shadow-lg">
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col gap-0.5">
                     <span className="text-sm font-semibold">{getDisplayName(user)}</span>

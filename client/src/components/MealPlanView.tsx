@@ -168,7 +168,7 @@ export function MealPlanView({ isGuest, onGuestAction }: Props) {
               const showTray = reasonTray?.day === day;
 
               return (
-                <div key={dayMeal.mealId}>
+                <div key={day}>
                   <motion.div
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
